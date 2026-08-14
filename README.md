@@ -71,7 +71,7 @@
 ```context
 ExtractAndDelete/
 │
-├── ExtractAndDelete.sln
+├── ExtractAndDelete.slnx
 │
 ├── src/
 │   │
