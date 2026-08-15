@@ -4,7 +4,7 @@ namespace ExtractAndDelete.Core;
 
 public class ArchiveExtractor
 {
-    public ExtractionResult Extract(string filePath, string destinationPath)
+    public static ExtractionResult Extract(string filePath, string destinationPath)
     {
         // judge the file exists or not
         if (!File.Exists(filePath))
@@ -15,7 +15,7 @@ public class ArchiveExtractor
                 ErrorMessage = "File doesn't exist."
             };
         }
-
+        
         // judge the file's extension is legal or not
         string filePathLowerKey = filePath.ToLower();
         string extension = Path.GetExtension(filePathLowerKey);
@@ -24,7 +24,7 @@ public class ArchiveExtractor
             return new ExtractionResult
             {
                 Success = false,
-                ErrorMessage = "The file's extension is illeagl."
+                ErrorMessage = "The file extension is illeagl."
             };
         }
 

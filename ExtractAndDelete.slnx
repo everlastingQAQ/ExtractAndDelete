@@ -2,4 +2,5 @@
   <Folder Name="/src/">
     <Project Path="src/ExtractAndDelete.Core/ExtractAndDelete.Core.csproj" />
   </Folder>
+  <Project Path="ExtractAndDelete.Tests/ExtractAndDelete.Tests.csproj" Id="1af0b770-b76f-40c3-a10e-bf4b2309a286" />
 </Solution>
