@@ -24,7 +24,7 @@ public class ArchiveExtractor
             return new ExtractionResult
             {
                 Success = false,
-                ErrorMessage = "The file extension is illeagl."
+                ErrorMessage = "The file extension is illegal."
             };
         }
 
