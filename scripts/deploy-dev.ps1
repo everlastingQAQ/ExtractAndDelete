@@ -21,6 +21,8 @@ if ($developerMode -ne 1) {
 
 Push-Location $repoRoot
 try {
+    & (Join-Path $repoRoot 'scripts\verify-third-party.ps1')
+
     $vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path -LiteralPath $vswherePath)) { throw 'vswhere.exe was not found.' }
     $msbuildPath = (& $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1)

@@ -9,6 +9,8 @@ $solutionPath = Join-Path $repoRoot 'ExtractAndDelete.slnx'
 
 Push-Location $repoRoot
 try {
+    & (Join-Path $repoRoot 'scripts\verify-third-party.ps1')
+
     dotnet restore $solutionPath --force-evaluate
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
 

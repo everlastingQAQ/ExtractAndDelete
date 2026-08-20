@@ -11,11 +11,21 @@ $guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\ne
 $manifestPath = Join-Path $guiOutput 'AppxManifest.xml'
 $shellPath = Join-Path $guiOutput 'ExtractAndDelete.ShellExtension.dll'
 $cliPath = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ExtractAndDelete.Cli.dll"
+$guiSevenZipRoot = Join-Path $guiOutput 'ThirdParty\7-Zip'
+$cliSevenZipRoot = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ThirdParty\7-Zip"
 
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest is missing: $manifestPath" }
 if (-not (Test-Path -LiteralPath $cliPath)) { throw "CLI output is missing: $cliPath" }
 if (-not (Test-Path -LiteralPath $shellPath)) {
     throw "Shell extension output is missing. Build scripts/verify.ps1 first with the Native Desktop workload."
+}
+foreach ($root in @($guiSevenZipRoot, $cliSevenZipRoot)) {
+    foreach ($fileName in @('7z.exe', '7z.dll')) {
+        $enginePath = Join-Path $root $fileName
+        if (-not (Test-Path -LiteralPath $enginePath -PathType Leaf)) {
+            throw "Bundled 7-Zip engine file is missing: $enginePath"
+        }
+    }
 }
 
 [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -34,8 +44,12 @@ foreach ($assetName in @('StoreLogo.png', 'Square44x44Logo.png', 'Square71x71Log
     $assetPath = Join-Path $guiOutput "Assets\$assetName"
     if (-not (Test-Path -LiteralPath $assetPath)) { throw "Package asset is missing: $assetPath" }
 }
-$zipVerb = $manifest.SelectSingleNode('//desktop4:ItemType[@Type=".zip"]/desktop4:Verb', $namespace)
-if ($null -eq $zipVerb -or $zipVerb.Id -ne 'ExtractAndDelete') { throw 'The .zip Explorer command is missing.' }
+foreach ($extension in @('.zip', '.7z', '.rar', '.tar')) {
+    $verb = $manifest.SelectSingleNode("//desktop4:ItemType[@Type='$extension']/desktop4:Verb", $namespace)
+    if ($null -eq $verb -or $verb.Id -ne 'ExtractAndDelete') {
+        throw "The $extension Explorer command is missing."
+    }
+}
 $comClass = $manifest.SelectSingleNode('//com:Class[@Id="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}"]', $namespace)
 if ($null -eq $comClass) { throw 'The Shell Extension COM class is missing.' }
 
@@ -45,7 +59,7 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V1 Developer RC layout checks passed.'
+Write-Host 'V2 Developer RC layout checks passed.'
 Write-Host "Package identity: $($identity.Name)"
 Write-Host "GUI output: $guiOutput"
 Write-Host "Shell extension: $shellPath"
