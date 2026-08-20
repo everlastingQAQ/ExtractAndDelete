@@ -1,69 +1,43 @@
-﻿using ExtractAndDelete.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using ExtractAndDelete.Core;
 
 namespace ExtractAndDelete.Tests;
-public class CleanupServiceTests
+
+public sealed class CleanupServiceTests
 {
-    // 测试文件不存在时回收失败
     [Fact]
-    public void MoveToRecycleBin_FileDoesNotExist_ReturnsFailure()
+    public async Task MoveToRecycleBinAsync_MissingFile_ReturnsUnavailable()
     {
-        // Arrange
         string filePath = Path.Combine(
             Path.GetTempPath(),
-            $"{Guid.NewGuid()}.txt"
-        );
+            $"ExtractAndDelete-missing-{Guid.NewGuid():N}.zip");
 
-        // Act
-        CleanupResult result =
-            CleanupService.MoveToRecycleBin(filePath);
+        CleanupResult result = await new CleanupService().MoveToRecycleBinAsync(filePath);
 
-        // Assert
         Assert.False(result.Success);
-        Assert.Equal("File doesn't exist.", result.ErrorMessage);
+        Assert.Equal(ErrorCode.RecycleUnavailable, result.ErrorCode);
+        Assert.True(File.Exists(filePath) is false);
     }
 
-    // 测试文件存在时解压成功
     [Fact]
-    public void MoveToRecycleBin_ExistingFile_ReturnsSuccess()
+    public async Task MoveToRecycleBinAsync_InvalidPath_ReturnsUnavailable()
     {
-        // Arrange
-        string root = Path.Combine(
-            Path.GetTempPath(),
-            Guid.NewGuid().ToString()
-        );
+        CleanupResult result = await new CleanupService().MoveToRecycleBinAsync(string.Empty);
 
-        Directory.CreateDirectory(root);
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.RecycleUnavailable, result.ErrorCode);
+    }
 
-        string filePath = Path.Combine(root, "test-delete-me.txt");
+    [Fact]
+    [Trait("Category", "WindowsIntegration")]
+    public async Task MoveToRecycleBinAsync_ExistingUniqueFile_LeavesNoOriginalPath()
+    {
+        using TemporaryDirectory temp = new();
+        string filePath = Path.Combine(temp.Path, $"integration-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(filePath, "integration test only");
 
-        File.WriteAllText(
-            filePath,
-            "This file is created only for CleanupService testing."
-        );
+        CleanupResult result = await new CleanupService().MoveToRecycleBinAsync(filePath);
 
-        try
-        {
-            // Act
-            CleanupResult result =
-                CleanupService.MoveToRecycleBin(filePath);
-
-            // Assert
-            Assert.True(result.Success);
-            Assert.Null(result.ErrorMessage);
-
-            // 原位置应该已经不存在
-            Assert.False(File.Exists(filePath));
-        }
-        finally
-        {
-            // Cleanup test directory itself
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
+        Assert.True(result.Success, result.DiagnosticMessage);
+        Assert.False(File.Exists(filePath));
     }
 }

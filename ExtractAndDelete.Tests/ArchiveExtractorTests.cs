@@ -1,230 +1,196 @@
-﻿using ExtractAndDelete.Core;
+using ExtractAndDelete.Core;
 using System.IO.Compression;
 
 namespace ExtractAndDelete.Tests;
-public class ArchiveExtractorTests
+
+public sealed class ArchiveExtractorTests
 {
-    // 测试文件不存在时无法解压
     [Fact]
-    public void Extract_FileDoesNotExist_ReturnsFailure()
+    public async Task ExtractAsync_ValidZip_ExtractsToStaging()
     {
-        // Arrange
-        string filePath = @"C:\this-file-should-not-exist";
-        string destinationPath = @"C:\temp\ExtractAndDeleteTest";
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateZip(
+            temp.Path,
+            "source.ZIP",
+            ("folder/hello.txt", "Hello"));
+        string stagingPath = Path.Combine(temp.Path, "staging");
 
-        // Act
-        ExtractionResult result = ArchiveExtractor.Extract(filePath, destinationPath);
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            stagingPath,
+            progress: null,
+            CancellationToken.None);
 
-        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(ErrorCode.None, result.ErrorCode);
+        Assert.Equal("Hello", File.ReadAllText(Path.Combine(stagingPath, "folder", "hello.txt")));
+        Assert.True(File.Exists(zipPath));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_EmptyZip_Succeeds()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "empty.zip", _ => { });
+        string stagingPath = Path.Combine(temp.Path, "staging");
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            stagingPath,
+            progress: null,
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(Directory.Exists(stagingPath));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_EmptyDirectory_PreservesDirectory()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "empty-dir.zip", archive =>
+        {
+            archive.CreateEntry("empty/");
+        });
+        string stagingPath = Path.Combine(temp.Path, "staging");
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            stagingPath,
+            progress: null,
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(Directory.Exists(Path.Combine(stagingPath, "empty")));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_InvalidZip_ReturnsArchiveUnreadable()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = Path.Combine(temp.Path, "invalid.zip");
+        File.WriteAllText(zipPath, "not a zip");
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress: null,
+            CancellationToken.None);
+
         Assert.False(result.Success);
-        Assert.Equal("File doesn't exist.", result.ErrorMessage);
+        Assert.Equal(ErrorCode.ArchiveUnreadable, result.ErrorCode);
     }
 
-    // 测试文件后缀不是.zip时无法解压
-    [Fact]
-    public void Extract_FileIsNotZIP_ReturnsFailure()
+    [Theory]
+    [InlineData("../escape.txt")]
+    [InlineData("/absolute.txt")]
+    [InlineData("C:/absolute.txt")]
+    [InlineData("folder/../../escape.txt")]
+    public async Task ExtractAsync_UnsafePath_IsRejected(string entryName)
     {
-        string filePath = Path.Combine(Path.GetTempPath(), "not-a-zip.txt");
-        try
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "unsafe.zip", archive =>
         {
-            // Arrange
-            string destinationPath = Path.Combine(Path.GetTempPath(), "ExtractAndDeleteTest");
-            File.WriteAllText(filePath, "hello");
+            ZipArchiveEntry entry = archive.CreateEntry(entryName);
+            using StreamWriter writer = new(entry.Open());
+            writer.Write("unsafe");
+        });
 
-            // Act
-            ExtractionResult result = ArchiveExtractor.Extract(filePath, destinationPath);
+        string stagingPath = Path.Combine(temp.Path, "staging");
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            stagingPath,
+            progress: null,
+            CancellationToken.None);
 
-            // Assert
-            Assert.False(result.Success);
-            Assert.Equal("The file extension is illegal.", result.ErrorMessage);
-
-
-        }
-        finally
-        {
-            // Cleanup
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
-        }
-        
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.UnsafeArchiveEntry, result.ErrorCode);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "escape.txt")));
     }
 
-    // 测试文件后缀名是.zip但是文件本身不是zip文件
     [Fact]
-    public void Extract_FileWithZIPExtensionButNotZIPFile_ReturnsFailure()
+    public async Task ExtractAsync_CaseInsensitiveDuplicatePath_IsRejected()
     {
-        string filePath = Path.Combine(Path.GetTempPath(), "not-a-zip.zip");
-        try
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "duplicate.zip", archive =>
         {
-            // Arrange
-            string destinationPath = Path.Combine(Path.GetTempPath(), "ExtractAndDeleteTest");
-            File.WriteAllText(filePath, "hello");
-
-            // Act
-            ExtractionResult result = ArchiveExtractor.Extract(filePath, destinationPath);
-
-            // Assert
-            Assert.False(result.Success);
-            Assert.NotNull(result.ErrorMessage);
-        }
-        finally
-        {
-            // Cleanup
-            if (File.Exists(filePath))
+            foreach (string name in new[] { "Readme.txt", "readme.TXT" })
             {
-                File.Delete(filePath);
+                ZipArchiveEntry entry = archive.CreateEntry(name);
+                using StreamWriter writer = new(entry.Open());
+                writer.Write(name);
             }
-        }
-        
+        });
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.DuplicateArchiveEntry, result.ErrorCode);
     }
 
-    // 测试遇到合法的.zip时解压成功
     [Fact]
-    public void Extract_ValidZIPFile_ReturnsSuccess()
+    public async Task ExtractAsync_FileDirectoryConflict_IsRejected()
     {
-        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        string destinationPath = Path.Combine(root, "output");
-        try
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "conflict.zip", archive =>
         {
-            // Arrange
-            string sourceDirectory = Path.Combine(root, "source");
-            string zipPath = Path.Combine(root, "test.zip");
-            
-            Directory.CreateDirectory(sourceDirectory);
-
-            string sourceFile = Path.Combine(sourceDirectory, "hello.txt");
-            File.WriteAllText(sourceFile, "Hello");
-
-            ZipFile.CreateFromDirectory(sourceDirectory, zipPath);
-
-            // Act
-            ExtractionResult result = ArchiveExtractor.Extract(zipPath, destinationPath);
-
-            // Assert
-            Assert.True(result.Success);
-            Assert.Null(result.ErrorMessage);
-
-            string extractedFile = Path.Combine(destinationPath, "hello.txt");
-
-            Assert.True(File.Exists(extractedFile));
-
-            Assert.Equal("Hello", File.ReadAllText(extractedFile));
-
-        }
-        finally
-        {
-            // Cleanup
-            if (Directory.Exists(root))
+            ZipArchiveEntry file = archive.CreateEntry("folder");
+            using (StreamWriter writer = new(file.Open()))
             {
-                Directory.Delete(root, recursive: true);
+                writer.Write("file");
             }
 
-            if (Directory.Exists(destinationPath))
-            {
-                Directory.Delete(destinationPath, recursive: true);
-            }
-        }
+            ZipArchiveEntry child = archive.CreateEntry("folder/child.txt");
+            using StreamWriter childWriter = new(child.Open());
+            childWriter.Write("child");
+        });
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.ArchiveEntryConflict, result.ErrorCode);
     }
 
-    // 测试遇到大写的.ZIP时解压成功
     [Fact]
-    public void Extract_ValidZIPFileWithUppercaseExtension_ReturnsSuccess()
+    public async Task ExtractAsync_CancellationDuringCopy_ReturnsCancelled()
     {
-        string root = Path.Combine(
-            Path.GetTempPath(),
-            Guid.NewGuid().ToString()
-        );
-
-        try
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "large.zip", archive =>
         {
-            // Arrange
-            string sourceDirectory = Path.Combine(root, "source");
-            string zipPath = Path.Combine(root, "test.ZIP");
-            string destinationPath = Path.Combine(root, "output");
-
-            Directory.CreateDirectory(sourceDirectory);
-
-            string sourceFile = Path.Combine(sourceDirectory, "hello.txt");
-            File.WriteAllText(sourceFile, "Hello");
-
-            ZipFile.CreateFromDirectory(sourceDirectory, zipPath);
-
-            // Act
-            ExtractionResult result =
-                ArchiveExtractor.Extract(zipPath, destinationPath);
-
-            // Assert
-            Assert.True(result.Success);
-            Assert.Null(result.ErrorMessage);
-
-            Assert.True(
-                File.Exists(Path.Combine(destinationPath, "hello.txt"))
-            );
-        }
-        finally
-        {
-            if (Directory.Exists(root))
+            ZipArchiveEntry entry = archive.CreateEntry("large.bin", CompressionLevel.NoCompression);
+            using Stream output = entry.Open();
+            byte[] buffer = new byte[1024 * 1024];
+            for (int i = 0; i < 8; i++)
             {
-                Directory.Delete(root, recursive: true);
+                output.Write(buffer);
             }
-        }
-    }
+        });
 
-    // 测试目标目录遇到同名文件时失败
-    [Fact]
-    public void Extract_DestinationContainsSameFile_ReturnsFailure()
-    {
-        string root = Path.Combine(
-            Path.GetTempPath(),
-            Guid.NewGuid().ToString()
-        );
-
-        try
+        using CancellationTokenSource cancellation = new();
+        Progress<ExtractionProgress> progress = new(value =>
         {
-            // Arrange
-            string sourceDirectory = Path.Combine(root, "source");
-            string zipPath = Path.Combine(root, "test.zip");
-            string destinationPath = Path.Combine(root, "output");
-
-            Directory.CreateDirectory(sourceDirectory);
-            Directory.CreateDirectory(destinationPath);
-
-            File.WriteAllText(
-                Path.Combine(sourceDirectory, "hello.txt"),
-                "new"
-            );
-
-            File.WriteAllText(
-                Path.Combine(destinationPath, "hello.txt"),
-                "old"
-            );
-
-            ZipFile.CreateFromDirectory(sourceDirectory, zipPath);
-
-            // Act
-            ExtractionResult result =
-                ArchiveExtractor.Extract(zipPath, destinationPath);
-
-            // Assert
-            Assert.False(result.Success);
-            Assert.NotNull(result.ErrorMessage);
-
-            // 更重要：原文件不能被覆盖
-            Assert.Equal(
-                "old",
-                File.ReadAllText(
-                    Path.Combine(destinationPath, "hello.txt")
-                )
-            );
-        }
-        finally
-        {
-            if (Directory.Exists(root))
+            if (value.Stage == WorkflowStage.Extracting && value.CompletedBytes > 0)
             {
-                Directory.Delete(root, recursive: true);
+                cancellation.Cancel();
             }
-        }
+        });
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress,
+            cancellation.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.Cancelled, result.ErrorCode);
+        Assert.True(File.Exists(zipPath));
     }
 }
