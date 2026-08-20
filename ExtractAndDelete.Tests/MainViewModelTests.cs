@@ -84,7 +84,7 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
-    public void NonZipArchive_IsRejectedBeforeExecution()
+    public void UnsupportedArchive_IsRejectedBeforeExecution()
     {
         using TemporaryDirectory temp = new();
         string archivePath = Path.Combine(temp.Path, "not-a-zip.txt");
@@ -96,6 +96,6 @@ public sealed class MainViewModelTests
 
         Assert.False(viewModel.CanExecute);
         Assert.Equal(StatusTone.Error, viewModel.StatusTone);
-        Assert.Contains("仅支持 ZIP", viewModel.StatusMessage);
+        Assert.Contains("仅支持 ZIP、7Z、RAR 和 TAR", viewModel.StatusMessage);
     }
 }

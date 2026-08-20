@@ -9,7 +9,7 @@
   <Identity
     Name="ExtractAndDelete"
     Publisher="CN=ExtractAndDelete Developer"
-    Version="1.0.0.0" />
+    Version="2.0.0.0" />
   <Properties>
     <DisplayName>Extract &amp; Delete</DisplayName>
     <PublisherDisplayName>Extract &amp; Delete</PublisherDisplayName>
@@ -53,6 +53,15 @@
     <desktop4:Extension Category="windows.fileExplorerContextMenus">
       <desktop4:FileExplorerContextMenus>
         <desktop4:ItemType Type=".zip">
+          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
+        </desktop4:ItemType>
+        <desktop4:ItemType Type=".7z">
+          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
+        </desktop4:ItemType>
+        <desktop4:ItemType Type=".rar">
+          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
+        </desktop4:ItemType>
+        <desktop4:ItemType Type=".tar">
           <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
         </desktop4:ItemType>
       </desktop4:FileExplorerContextMenus>

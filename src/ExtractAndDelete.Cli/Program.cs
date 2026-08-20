@@ -2,7 +2,7 @@ using ExtractAndDelete.Core;
 
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("用法：ExtractAndDelete.Cli.exe <zip路径> <最终目标目录>");
+    Console.Error.WriteLine("用法：ExtractAndDelete.Cli.exe <压缩包路径> <最终目标目录>");
     return 1;
 }
 
@@ -84,7 +84,7 @@ finally
 static string GetStageMessage(WorkflowStage stage) => stage switch
 {
     WorkflowStage.Validating => "正在验证",
-    WorkflowStage.Scanning => "正在扫描",
+            WorkflowStage.Scanning => "正在扫描压缩包",
     WorkflowStage.Extracting => "正在解压",
     WorkflowStage.Publishing => "正在发布",
     WorkflowStage.Recycling => "正在移入回收站",

@@ -1,4 +1,5 @@
 using ExtractAndDelete.Gui.ViewModels;
+using ExtractAndDelete.Core;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -47,7 +48,10 @@ public sealed partial class MainWindow : Window
     private async void ChooseArchiveButton_Click(object sender, RoutedEventArgs e)
     {
         FileOpenPicker picker = new();
-        picker.FileTypeFilter.Add(".zip");
+        foreach (string extension in SupportedArchiveFormats.Extensions)
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
         StorageFile? file = await picker.PickSingleFileAsync();
         if (file is not null)

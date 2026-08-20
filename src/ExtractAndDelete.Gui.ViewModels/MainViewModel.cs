@@ -18,8 +18,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string? _parentDirectory;
     private string? _destinationPath;
     private string _currentEntry = string.Empty;
-    private string _statusMessage = "请选择 ZIP 和目标父目录。";
+    private string _statusMessage = "请选择压缩包和目标父目录。";
     private double _progressPercentage;
+    private bool _isProgressIndeterminate;
     private bool _isRunning;
     private bool _completedSuccessfully;
     private bool _canCancel;
@@ -64,6 +65,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         private set => SetField(ref _progressPercentage, value);
     }
 
+    public bool IsProgressIndeterminate
+    {
+        get => _isProgressIndeterminate;
+        private set => SetField(ref _isProgressIndeterminate, value);
+    }
+
     public StatusTone StatusTone => _statusTone;
 
     public bool IsRunning
@@ -98,7 +105,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         !IsRunning
         && !_completedSuccessfully
         && !string.IsNullOrWhiteSpace(ArchivePath)
-        && ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+        && SupportedArchiveFormats.TryResolve(ArchivePath, out _)
         && !string.IsNullOrWhiteSpace(ParentDirectory)
         && !string.IsNullOrWhiteSpace(DestinationPath)
         && !Directory.Exists(DestinationPath)
@@ -119,22 +126,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
         DestinationPath = null;
         _completedSuccessfully = false;
         ProgressPercentage = 0;
+        IsProgressIndeterminate = false;
         CurrentEntry = string.Empty;
         if (ArchivePath is null)
         {
             SetStatus(
                 string.IsNullOrWhiteSpace(path)
-                    ? "请选择 ZIP 和目标父目录。"
-                    : "压缩包路径无效，请重新选择 ZIP。",
+                    ? "请选择压缩包和目标父目录。"
+                    : "压缩包路径无效，请重新选择。",
                 string.IsNullOrWhiteSpace(path) ? StatusTone.Normal : StatusTone.Error);
         }
-        else if (!ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        else if (!SupportedArchiveFormats.TryResolve(ArchivePath, out _))
         {
-            SetStatus("当前版本仅支持 ZIP 压缩包，请重新选择。", StatusTone.Error);
+            SetStatus("当前版本仅支持 ZIP、7Z、RAR 和 TAR 压缩包，请重新选择。", StatusTone.Error);
         }
         else
         {
-            SetStatus("已选择 ZIP，请重新选择目标父目录。", StatusTone.Normal);
+            SetStatus("已选择压缩包，请重新选择目标父目录。", StatusTone.Normal);
         }
         Raise(nameof(CanExecute));
     }
@@ -163,9 +171,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             SetStatus("任务已完成，请重新选择 ZIP 后开始新任务。", StatusTone.Normal);
         }
         else if (!string.IsNullOrWhiteSpace(ArchivePath)
-            && !ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            && !SupportedArchiveFormats.TryResolve(ArchivePath, out _))
         {
-            SetStatus("当前版本仅支持 ZIP 压缩包，请重新选择。", StatusTone.Error);
+            SetStatus("当前版本仅支持 ZIP、7Z、RAR 和 TAR 压缩包，请重新选择。", StatusTone.Error);
         }
         else if (!string.IsNullOrWhiteSpace(DestinationPath)
             && (Directory.Exists(DestinationPath) || File.Exists(DestinationPath)))
@@ -195,6 +203,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _completedSuccessfully = false;
         _cancellationTokenSource = new CancellationTokenSource();
         ProgressPercentage = 0;
+        IsProgressIndeterminate = false;
         CurrentEntry = string.Empty;
         SetStatus("正在验证操作……", StatusTone.Normal);
 
@@ -261,11 +270,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         CanCancel = progress.CanCancel
             && progress.Stage is WorkflowStage.Scanning or WorkflowStage.Extracting;
         CurrentEntry = progress.CurrentEntry ?? string.Empty;
+        IsProgressIndeterminate = progress.IsIndeterminate;
         ProgressPercentage = Math.Clamp(progress.Percentage, 0, 100);
         SetStatus(progress.Stage switch
         {
             WorkflowStage.Validating => "正在验证……",
-            WorkflowStage.Scanning => "正在扫描 ZIP……",
+            WorkflowStage.Scanning => "正在扫描压缩包……",
             WorkflowStage.Extracting => "正在解压……",
             WorkflowStage.Publishing => "正在发布完整目录，请稍候……",
             WorkflowStage.Recycling => "正在移入回收站，请稍候……",
@@ -279,6 +289,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void ApplyResult(ExtractAndDeleteResult result)
     {
         _completedSuccessfully = result.Outcome == WorkflowOutcome.Completed;
+        IsProgressIndeterminate = false;
         ProgressPercentage = result.DestinationPublished ? 100 : ProgressPercentage;
         CurrentEntry = string.Empty;
 
@@ -302,7 +313,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
 
         string archiveName = Path.GetFileNameWithoutExtension(archivePath);
-        return Path.Combine(parentDirectory, archiveName);
+        return string.IsNullOrWhiteSpace(archiveName)
+            ? null
+            : Path.Combine(parentDirectory, archiveName);
     }
 
     private static string? TryGetFullPath(string? path)
