@@ -29,3 +29,17 @@ public class CleanupResult
         set;
     }
 }
+
+public class ExtractAndDeleteResult
+{
+    public bool Success 
+    { 
+        get; 
+        set; 
+    }
+    public string? ErrorMessage
+    { 
+        get; 
+        set; 
+    }
+}
