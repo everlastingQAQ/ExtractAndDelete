@@ -4,6 +4,7 @@ using System.IO.Compression;
 namespace ExtractAndDelete.Tests;
 public class ArchiveExtractorTests
 {
+    // 测试文件不存在时无法解压
     [Fact]
     public void Extract_FileDoesNotExist_ReturnsFailure()
     {
@@ -19,6 +20,7 @@ public class ArchiveExtractorTests
         Assert.Equal("File doesn't exist.", result.ErrorMessage);
     }
 
+    // 测试文件后缀不是.zip时无法解压
     [Fact]
     public void Extract_FileIsNotZIP_ReturnsFailure()
     {
@@ -49,6 +51,7 @@ public class ArchiveExtractorTests
         
     }
 
+    // 测试文件后缀名是.zip但是文件本身不是zip文件
     [Fact]
     public void Extract_FileWithZIPExtensionButNotZIPFile_ReturnsFailure()
     {
@@ -77,6 +80,7 @@ public class ArchiveExtractorTests
         
     }
 
+    // 测试遇到合法的.zip时解压成功
     [Fact]
     public void Extract_ValidZIPFile_ReturnsSuccess()
     {
@@ -120,6 +124,106 @@ public class ArchiveExtractorTests
             if (Directory.Exists(destinationPath))
             {
                 Directory.Delete(destinationPath, recursive: true);
+            }
+        }
+    }
+
+    // 测试遇到大写的.ZIP时解压成功
+    [Fact]
+    public void Extract_ValidZIPFileWithUppercaseExtension_ReturnsSuccess()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            Guid.NewGuid().ToString()
+        );
+
+        try
+        {
+            // Arrange
+            string sourceDirectory = Path.Combine(root, "source");
+            string zipPath = Path.Combine(root, "test.ZIP");
+            string destinationPath = Path.Combine(root, "output");
+
+            Directory.CreateDirectory(sourceDirectory);
+
+            string sourceFile = Path.Combine(sourceDirectory, "hello.txt");
+            File.WriteAllText(sourceFile, "Hello");
+
+            ZipFile.CreateFromDirectory(sourceDirectory, zipPath);
+
+            // Act
+            ExtractionResult result =
+                ArchiveExtractor.Extract(zipPath, destinationPath);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Null(result.ErrorMessage);
+
+            Assert.True(
+                File.Exists(Path.Combine(destinationPath, "hello.txt"))
+            );
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    // 测试目标目录遇到同名文件时失败
+    [Fact]
+    public void Extract_DestinationContainsSameFile_ReturnsFailure()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            Guid.NewGuid().ToString()
+        );
+
+        try
+        {
+            // Arrange
+            string sourceDirectory = Path.Combine(root, "source");
+            string zipPath = Path.Combine(root, "test.zip");
+            string destinationPath = Path.Combine(root, "output");
+
+            Directory.CreateDirectory(sourceDirectory);
+            Directory.CreateDirectory(destinationPath);
+
+            File.WriteAllText(
+                Path.Combine(sourceDirectory, "hello.txt"),
+                "new"
+            );
+
+            File.WriteAllText(
+                Path.Combine(destinationPath, "hello.txt"),
+                "old"
+            );
+
+            ZipFile.CreateFromDirectory(sourceDirectory, zipPath);
+
+            // Act
+            ExtractionResult result =
+                ArchiveExtractor.Extract(zipPath, destinationPath);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.NotNull(result.ErrorMessage);
+
+            // 更重要：原文件不能被覆盖
+            Assert.Equal(
+                "old",
+                File.ReadAllText(
+                    Path.Combine(destinationPath, "hello.txt")
+                )
+            );
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
             }
         }
     }
