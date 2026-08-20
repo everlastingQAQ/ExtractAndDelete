@@ -16,7 +16,7 @@ namespace
     const CLSID kCommandClsid = { 0x4f4f8f37, 0xb78c, 0x4b3d, { 0x90, 0xce, 0x8d, 0x16, 0xc4, 0x48, 0x3b, 0x8e } };
     const GUID kCanonicalName = { 0x8d50c9df, 0xf053, 0x4e87, { 0x8f, 0x4a, 0xa1, 0x47, 0x1c, 0x44, 0x37, 0x28 } };
 
-    bool IsZipFile(IShellItem* item, std::wstring& path)
+    bool IsSupportedArchiveFile(IShellItem* item, std::wstring& path)
     {
         if (item == nullptr)
         {
@@ -40,10 +40,14 @@ namespace
         path.assign(displayName);
         CoTaskMemFree(displayName);
         const wchar_t* extension = PathFindExtensionW(path.c_str());
-        return extension != nullptr && _wcsicmp(extension, L".zip") == 0;
+        return extension != nullptr
+            && (_wcsicmp(extension, L".zip") == 0
+                || _wcsicmp(extension, L".7z") == 0
+                || _wcsicmp(extension, L".rar") == 0
+                || _wcsicmp(extension, L".tar") == 0);
     }
 
-    bool GetSingleZipPath(IShellItemArray* selection, std::wstring& path)
+    bool GetSingleArchivePath(IShellItemArray* selection, std::wstring& path)
     {
         if (selection == nullptr)
         {
@@ -63,7 +67,7 @@ namespace
             return false;
         }
 
-        bool valid = IsZipFile(item, path);
+        bool valid = IsSupportedArchiveFile(item, path);
         item->Release();
         return valid;
     }
@@ -251,14 +255,14 @@ namespace
                 return E_POINTER;
             }
             std::wstring path;
-            *state = GetSingleZipPath(selection, path) ? ECS_ENABLED : ECS_DISABLED;
+            *state = GetSingleArchivePath(selection, path) ? ECS_ENABLED : ECS_DISABLED;
             return S_OK;
         }
 
         HRESULT STDMETHODCALLTYPE Invoke(IShellItemArray* selection, IBindCtx*) override
         {
             std::wstring path;
-            if (!GetSingleZipPath(selection, path))
+            if (!GetSingleArchivePath(selection, path))
             {
                 return E_INVALIDARG;
             }
