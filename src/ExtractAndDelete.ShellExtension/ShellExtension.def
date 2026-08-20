@@ -1,0 +1,3 @@
+EXPORTS
+    DllCanUnloadNow=ExtractAndDeleteDllCanUnloadNow PRIVATE
+    DllGetClassObject=ExtractAndDeleteDllGetClassObject PRIVATE

@@ -99,15 +99,17 @@ namespace
     std::wstring GetAppUserModelId()
     {
         UINT32 length = 0;
-        LONG status = GetCurrentPackageInfo(0, &length, nullptr);
-        if (status != ERROR_INSUFFICIENT_BUFFER || length == 0)
+        UINT32 count = 0;
+        LONG status = GetCurrentPackageInfo(0, &length, nullptr, &count);
+        if (status != ERROR_INSUFFICIENT_BUFFER || length == 0 || count == 0)
         {
             return L"ExtractAndDelete!App";
         }
 
         std::vector<BYTE> buffer(length);
         auto packageInfo = reinterpret_cast<PACKAGE_INFO*>(buffer.data());
-        if (GetCurrentPackageInfo(0, &length, packageInfo) != ERROR_SUCCESS)
+        if (GetCurrentPackageInfo(0, &length, buffer.data(), &count) != ERROR_SUCCESS
+            || count == 0)
         {
             return L"ExtractAndDelete!App";
         }
@@ -382,12 +384,12 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
     return TRUE;
 }
 
-extern "C" HRESULT __declspec(dllexport) __stdcall DllCanUnloadNow()
+extern "C" HRESULT __stdcall ExtractAndDeleteDllCanUnloadNow()
 {
     return g_serverLocks == 0 && g_objectCount == 0 ? S_OK : S_FALSE;
 }
 
-extern "C" HRESULT __declspec(dllexport) __stdcall DllGetClassObject(
+extern "C" HRESULT __stdcall ExtractAndDeleteDllGetClassObject(
     REFCLSID clsid,
     REFIID iid,
     void** object)
