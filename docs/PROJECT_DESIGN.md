@@ -2,13 +2,22 @@
 
 ## 1. 当前基线
 
-V0.5 已完成：
+V0.5 已完成并已合入 `main`：
 
 - ZIP 解压。
 - 源 ZIP 移入 Windows 回收站。
 - Core 工作流。
 - CLI 入口。
 - V0.5 Core 测试。
+
+V1 当前已落地：
+
+- Core 异步契约、稳定错误码、源文件身份校验和 staging 工作流。
+- 真正可取消的 ZIP 扫描/复制、同卷原子发布和回收失败保留语义。
+- `IFileOperation` 回收站实现和新的 CLI 退出码。
+- .NET 10 / WinUI 3 / Windows App SDK 2.3.1 单项目 packaged GUI。
+- 简体中文 ViewModel、Explorer 激活参数解析、单实例状态入口和 Windows 原生文件夹选择器。
+- x64 `IExplorerCommand` C++ DLL 源码、package manifest 注册项和 Developer Mode 脚本。
 
 V1.0 的交付定义是 Windows 11 x64 Developer RC。它通过 Windows Developer Mode 部署 packaged 自包含应用，不承诺公开签名安装包。
 
@@ -153,6 +162,20 @@ Package manifest 使用 `windows.comServer` 和 `windows.fileExplorerContextMenu
 
 保留 V1 接口和 staging 工作流，新增随包分发的官方 7-Zip `7z.exe + 7z.dll` 进程引擎，首批支持 ZIP、7z、RAR、TAR。非零退出码全部按失败处理，许可证和二进制哈希必须随包记录。
 
-## 10. 开发流程
+## 10. 构建、部署和工具链
+
+普通 C# 构建与测试：
+
+```powershell
+dotnet restore .\ExtractAndDelete.slnx
+dotnet build .\ExtractAndDelete.slnx --configuration Release --no-restore
+dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter "Category!=WindowsIntegration"
+```
+
+`scripts/verify.ps1` 会额外用 MSBuild 构建 x64 C++ Shell Extension，再执行相同的 Release 构建和普通测试。它要求 Visual Studio Native Desktop、x64 MSVC 和 Windows SDK；真实回收站测试使用 `Category=WindowsIntegration` 单独运行。
+
+`scripts/deploy-dev.ps1` 在 Developer Mode 下构建并注册准确的 package manifest；`scripts/uninstall-dev.ps1` 只注销固定 `ExtractAndDelete` identity。仓库不包含 `.pfx`、签名包或正式发布配置。
+
+## 11. 开发流程
 
 不使用 Issue、PR 或额外开发分支。V0.5 收口后直接在 `main` 上按阶段 commit、测试并 push。禁止 force-push、提交证书或跳过失败测试。

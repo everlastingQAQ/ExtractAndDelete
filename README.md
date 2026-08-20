@@ -10,13 +10,17 @@
 只有解压完整成功且回收成功 → 工作流完成
 ```
 
-当前状态：V0.5 Core、CLI 和测试已完成；V1.0 正在实现 Windows 11 x64 Developer RC。
+当前状态：V1 Core、CLI、WinUI 3 packaged GUI、Explorer COM 源码和开发部署脚本已进入 `main`；Developer RC 的真实 Shell DLL 构建和 VM 验收仍需本机安装 Native Desktop/Windows SDK 后完成。
 
 ## 构建和测试
 
 ```powershell
 dotnet restore .\ExtractAndDelete.slnx
-dotnet test .\ExtractAndDelete.slnx --configuration Release
+dotnet build .\ExtractAndDelete.slnx --configuration Release --no-restore
+dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter "Category!=WindowsIntegration"
+
+# 包含 x64 C++ Explorer DLL 的完整验证（需要 VS Native Desktop + Windows SDK）
+.\scripts\verify.ps1
 ```
 
 ## CLI
@@ -24,6 +28,8 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release
 ```powershell
 ExtractAndDelete.Cli.exe <zip路径> <最终目标目录>
 ```
+
+开发部署使用 `.\scripts\deploy-dev.ps1`，注销使用 `.\scripts\uninstall-dev.ps1`。脚本只处理固定的 `ExtractAndDelete` package identity，不会搜索或删除其他包。
 
 ## 设计文档
 

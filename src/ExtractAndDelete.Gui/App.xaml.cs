@@ -12,6 +12,7 @@ public partial class App : Application
         AppInstance.FindOrRegisterForKey("ExtractAndDelete.Main");
 
     private MainWindow? _window;
+    private DispatcherQueue? _dispatcherQueue;
 
     public App()
     {
@@ -40,6 +41,7 @@ public partial class App : Application
         }
 
         _window ??= new MainWindow();
+        _dispatcherQueue ??= DispatcherQueue.GetForCurrentThread();
         _window.Activate();
         _window.HandleActivation(
             CommandLineActivation.TryGetArchivePath(args.Arguments)
@@ -48,11 +50,16 @@ public partial class App : Application
 
     private void MainInstance_Activated(object? sender, AppActivationArguments args)
     {
-        DispatcherQueue dispatcherQueue = DispatcherQueue.GetForCurrentThread()
-            ?? throw new InvalidOperationException("The application dispatcher is unavailable.");
+        DispatcherQueue? dispatcherQueue = _dispatcherQueue ?? _window?.DispatcherQueue;
+        if (dispatcherQueue is null)
+        {
+            return;
+        }
+
         dispatcherQueue.TryEnqueue(() =>
         {
             _window ??= new MainWindow();
+            _dispatcherQueue ??= _window.DispatcherQueue;
             _window.Activate();
             string? arguments = args.Data is Windows.ApplicationModel.Activation.LaunchActivatedEventArgs launch
                 ? launch.Arguments

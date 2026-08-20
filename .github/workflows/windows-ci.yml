@@ -19,11 +19,6 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
-        run: dotnet restore .\ExtractAndDelete.slnx
-
-      - name: Build
-        run: dotnet build .\ExtractAndDelete.slnx --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --verbosity normal --filter "Category!=WindowsIntegration"
+      - name: Verify release build, shell extension and ordinary tests
+        shell: pwsh
+        run: .\scripts\verify.ps1

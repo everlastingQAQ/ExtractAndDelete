@@ -72,13 +72,19 @@ public sealed record ArchiveExtractionResult(
     bool Success,
     ErrorCode ErrorCode,
     string UserMessage,
-    string? DiagnosticMessage = null);
+    string? DiagnosticMessage = null)
+{
+    public string? ErrorMessage => Success ? null : UserMessage;
+}
 
 public sealed record CleanupResult(
     bool Success,
     ErrorCode ErrorCode,
     string UserMessage,
-    string? DiagnosticMessage = null);
+    string? DiagnosticMessage = null)
+{
+    public string? ErrorMessage => Success ? null : UserMessage;
+}
 
 public sealed record ExtractAndDeleteResult(
     WorkflowOutcome Outcome,
