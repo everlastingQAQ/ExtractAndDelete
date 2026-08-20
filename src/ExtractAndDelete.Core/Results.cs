@@ -14,3 +14,18 @@ public class ExtractionResult
         set;
     }
 }
+
+public class CleanupResult
+{
+    public bool Success
+    {
+        get;
+        set;
+    }
+
+    public string? ErrorMessage
+    {
+        get;
+        set;
+    }
+}

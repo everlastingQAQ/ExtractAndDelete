@@ -6,7 +6,7 @@ public class ArchiveExtractor
 {
     public static ExtractionResult Extract(string filePath, string destinationPath)
     {
-        // judge the file exists or not
+        // 判断文件是否存在
         if (!File.Exists(filePath))
         {
             return new ExtractionResult
@@ -16,7 +16,7 @@ public class ArchiveExtractor
             };
         }
         
-        // judge the file's extension is legal or not
+        // 判断文件的拓展名是否合法
         string filePathLowerKey = filePath.ToLower();
         string extension = Path.GetExtension(filePathLowerKey);
         if (!extension.Equals(".zip"))
@@ -28,15 +28,15 @@ public class ArchiveExtractor
             };
         }
 
-        // try to extract the file
+        // 尝试解压文件
         try
         {
-            // create the destinated path
+            // 创建解压目录
             Directory.CreateDirectory(destinationPath);
 
             ZipFile.ExtractToDirectory(filePath, destinationPath);
         }
-        // check the file is extracted or not
+        // 查看文件是否解压成功
         catch (Exception ex)
         {
             return new ExtractionResult
