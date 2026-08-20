@@ -24,6 +24,8 @@ public sealed class ArchiveExtractor : IArchiveExtractor
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             await using FileStream source = new(
                 archivePath,
                 FileMode.Open,
@@ -45,7 +47,10 @@ public sealed class ArchiveExtractor : IArchiveExtractor
             IReadOnlyList<ValidatedEntry> entries = ValidateEntries(
                 archive,
                 stagingPath,
+                progress,
+                cancellationToken,
                 out long totalBytes);
+            cancellationToken.ThrowIfCancellationRequested();
 
             string? root = Path.GetPathRoot(stagingPath);
             long availableBytes = string.IsNullOrEmpty(root)
@@ -59,6 +64,7 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                     $"Available bytes: {availableBytes}; required bytes: {totalBytes}.");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(stagingPath);
             EnsureNoReparsePoints(stagingPath);
             int completedEntries = 0;
@@ -137,6 +143,20 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                 "无法读取 ZIP，文件可能已损坏或受密码保护。",
                 ex.ToString());
         }
+        catch (NotSupportedException ex)
+        {
+            return Failure(
+                ErrorCode.ArchiveUnreadable,
+                "无法读取 ZIP，文件可能已损坏或受密码保护。",
+                ex.ToString());
+        }
+        catch (OverflowException ex)
+        {
+            return Failure(
+                ErrorCode.ArchiveSizeOverflow,
+                "压缩包声明的解压大小超出可处理范围。",
+                ex.ToString());
+        }
         catch (IOException ex)
         {
             return Failure(
@@ -189,7 +209,13 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                 }
 
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                entryBytes += read;
+                entryBytes = checked(entryBytes + read);
+                if (entryBytes > entry.Length)
+                {
+                    throw new InvalidDataException(
+                        $"Archive entry '{entry.FullName}' produced more data than declared.");
+                }
+
                 progress?.Report(new ExtractionProgress(
                     WorkflowStage.Extracting,
                     entry.FullName,
@@ -198,6 +224,12 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                     completedBytes + entryBytes,
                     totalBytes,
                     CanCancel: true));
+            }
+
+            if (entryBytes != entry.Length)
+            {
+                throw new InvalidDataException(
+                    $"Archive entry '{entry.FullName}' ended before its declared length.");
             }
 
             await output.FlushAsync(cancellationToken);
@@ -211,19 +243,24 @@ public sealed class ArchiveExtractor : IArchiveExtractor
     private static IReadOnlyList<ValidatedEntry> ValidateEntries(
         ZipArchive archive,
         string stagingPath,
+        IProgress<ExtractionProgress>? progress,
+        CancellationToken cancellationToken,
         out long totalBytes)
     {
         string fullStagingPath = Path.GetFullPath(stagingPath)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         string stagingPrefix = fullStagingPath + Path.DirectorySeparatorChar;
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<ValidatedEntry>(archive.Entries.Count);
         totalBytes = 0;
+        int scannedEntries = 0;
 
         foreach (ZipArchiveEntry entry in archive.Entries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (IsSymbolicLink(entry))
             {
                 throw new ArchiveValidationException(
@@ -244,15 +281,23 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                     entry.FullName);
             }
 
-            bool isDirectory = entry.FullName.EndsWith("/", StringComparison.Ordinal);
+            bool isDirectory = entry.FullName
+                .Replace('\\', '/')
+                .EndsWith("/", StringComparison.Ordinal);
 
-            if (!seen.Add(normalizedRelative))
+            if (seen.TryGetValue(normalizedRelative, out bool previousIsDirectory))
             {
                 throw new ArchiveValidationException(
-                    ErrorCode.DuplicateArchiveEntry,
-                    "压缩包包含重复路径。",
+                    previousIsDirectory == isDirectory
+                        ? ErrorCode.DuplicateArchiveEntry
+                        : ErrorCode.ArchiveEntryConflict,
+                    previousIsDirectory == isDirectory
+                        ? "压缩包包含重复路径。"
+                        : "压缩包包含文件与目录同名冲突。",
                     entry.FullName);
             }
+
+            seen.Add(normalizedRelative, isDirectory);
 
             if (isDirectory)
             {
@@ -265,6 +310,15 @@ public sealed class ArchiveExtractor : IArchiveExtractor
             }
 
             result.Add(new ValidatedEntry(entry, destinationPath, isDirectory));
+            scannedEntries++;
+            progress?.Report(new ExtractionProgress(
+                WorkflowStage.Scanning,
+                entry.FullName,
+                scannedEntries,
+                archive.Entries.Count,
+                0,
+                0,
+                CanCancel: true));
         }
 
         foreach (string file in files)
@@ -338,7 +392,37 @@ public sealed class ArchiveExtractor : IArchiveExtractor
                 entryName);
         }
 
+        char[] invalidFileNameChars = Path.GetInvalidFileNameChars();
+        foreach (string part in parts)
+        {
+            if (part.EndsWith(".", StringComparison.Ordinal)
+                || part.EndsWith(" ", StringComparison.Ordinal)
+                || part.IndexOfAny(invalidFileNameChars) >= 0
+                || IsReservedDeviceName(part))
+            {
+                throw new ArchiveValidationException(
+                    ErrorCode.UnsafeArchiveEntry,
+                    "压缩包包含 Windows 不支持的文件名。",
+                    entryName);
+            }
+        }
+
         return string.Join(Path.DirectorySeparatorChar, parts);
+    }
+
+    private static bool IsReservedDeviceName(string part)
+    {
+        string name = Path.GetFileNameWithoutExtension(part);
+        return name.Equals("CON", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("NUL", StringComparison.OrdinalIgnoreCase)
+            || (name.Length == 4
+                && name.StartsWith("COM", StringComparison.OrdinalIgnoreCase)
+                && name[3] is >= '1' and <= '9')
+            || (name.Length == 4
+                && name.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)
+                && name[3] is >= '1' and <= '9');
     }
 
     private static bool IsSymbolicLink(ZipArchiveEntry entry)

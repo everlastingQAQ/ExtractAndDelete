@@ -98,6 +98,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         !IsRunning
         && !_completedSuccessfully
         && !string.IsNullOrWhiteSpace(ArchivePath)
+        && ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
         && !string.IsNullOrWhiteSpace(ParentDirectory)
         && !string.IsNullOrWhiteSpace(DestinationPath)
         && !Directory.Exists(DestinationPath)
@@ -113,17 +114,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        ArchivePath = string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+        ArchivePath = TryGetFullPath(path);
         ParentDirectory = null;
         DestinationPath = null;
         _completedSuccessfully = false;
         ProgressPercentage = 0;
         CurrentEntry = string.Empty;
-        SetStatus(
-            string.IsNullOrWhiteSpace(ArchivePath)
-                ? "请选择 ZIP 和目标父目录。"
-                : "已选择 ZIP，请重新选择目标父目录。",
-            StatusTone.Normal);
+        if (ArchivePath is null)
+        {
+            SetStatus(
+                string.IsNullOrWhiteSpace(path)
+                    ? "请选择 ZIP 和目标父目录。"
+                    : "压缩包路径无效，请重新选择 ZIP。",
+                string.IsNullOrWhiteSpace(path) ? StatusTone.Normal : StatusTone.Error);
+        }
+        else if (!ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("当前版本仅支持 ZIP 压缩包，请重新选择。", StatusTone.Error);
+        }
+        else
+        {
+            SetStatus("已选择 ZIP，请重新选择目标父目录。", StatusTone.Normal);
+        }
         Raise(nameof(CanExecute));
     }
 
@@ -135,14 +147,34 @@ public sealed class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        ParentDirectory = string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+        ParentDirectory = TryGetFullPath(path);
         DestinationPath = ComputeDestinationPath(ArchivePath, ParentDirectory);
-        _completedSuccessfully = false;
 
-        if (!string.IsNullOrWhiteSpace(DestinationPath)
+        if (ParentDirectory is null)
+        {
+            SetStatus(
+                string.IsNullOrWhiteSpace(path)
+                    ? "请选择目标父目录。"
+                    : "目标父目录路径无效，请重新选择文件夹。",
+                string.IsNullOrWhiteSpace(path) ? StatusTone.Normal : StatusTone.Error);
+        }
+        else if (_completedSuccessfully)
+        {
+            SetStatus("任务已完成，请重新选择 ZIP 后开始新任务。", StatusTone.Normal);
+        }
+        else if (!string.IsNullOrWhiteSpace(ArchivePath)
+            && !ArchivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("当前版本仅支持 ZIP 压缩包，请重新选择。", StatusTone.Error);
+        }
+        else if (!string.IsNullOrWhiteSpace(DestinationPath)
             && (Directory.Exists(DestinationPath) || File.Exists(DestinationPath)))
         {
             SetStatus("最终目录已存在，请重新选择目标父目录。", StatusTone.Error);
+        }
+        else if (ArchivePath is null)
+        {
+            SetStatus("已选择目标父目录，请选择 ZIP。", StatusTone.Normal);
         }
         else
         {
@@ -271,6 +303,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         string archiveName = Path.GetFileNameWithoutExtension(archivePath);
         return Path.Combine(parentDirectory, archiveName);
+    }
+
+    private static string? TryGetFullPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

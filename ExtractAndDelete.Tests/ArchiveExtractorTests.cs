@@ -86,6 +86,9 @@ public sealed class ArchiveExtractorTests
     [InlineData("/absolute.txt")]
     [InlineData("C:/absolute.txt")]
     [InlineData("folder/../../escape.txt")]
+    [InlineData("CON.txt")]
+    [InlineData("invalid?.txt")]
+    [InlineData("trailing-space.txt ")]
     public async Task ExtractAsync_UnsafePath_IsRejected(string entryName)
     {
         using TemporaryDirectory temp = new();
@@ -160,6 +163,65 @@ public sealed class ArchiveExtractorTests
     }
 
     [Fact]
+    public async Task ExtractAsync_SamePathAsFileAndDirectory_IsRejectedAsConflict()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "same-path.zip", archive =>
+        {
+            ZipArchiveEntry file = archive.CreateEntry("folder");
+            using (StreamWriter writer = new(file.Open()))
+            {
+                writer.Write("file");
+            }
+
+            archive.CreateEntry("folder/");
+        });
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.ArchiveEntryConflict, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_CancellationDuringScan_ReturnsCancelled()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateArchive(temp.Path, "many-entries.zip", archive =>
+        {
+            for (int index = 0; index < 10; index++)
+            {
+                ZipArchiveEntry entry = archive.CreateEntry($"file-{index}.txt");
+                using StreamWriter writer = new(entry.Open());
+                writer.Write(index);
+            }
+        });
+
+        using CancellationTokenSource cancellation = new();
+        var progress = new InlineProgress(value =>
+        {
+            if (value.Stage == WorkflowStage.Scanning && value.CompletedEntries >= 1)
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        ArchiveExtractionResult result = await new ArchiveExtractor().ExtractAsync(
+            zipPath,
+            Path.Combine(temp.Path, "staging"),
+            progress,
+            cancellation.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.Cancelled, result.ErrorCode);
+        Assert.True(File.Exists(zipPath));
+    }
+
+    [Fact]
     public async Task ExtractAsync_CancellationDuringCopy_ReturnsCancelled()
     {
         using TemporaryDirectory temp = new();
@@ -192,5 +254,10 @@ public sealed class ArchiveExtractorTests
         Assert.False(result.Success);
         Assert.Equal(ErrorCode.Cancelled, result.ErrorCode);
         Assert.True(File.Exists(zipPath));
+    }
+
+    private sealed class InlineProgress(Action<ExtractionProgress> handler) : IProgress<ExtractionProgress>
+    {
+        public void Report(ExtractionProgress value) => handler(value);
     }
 }

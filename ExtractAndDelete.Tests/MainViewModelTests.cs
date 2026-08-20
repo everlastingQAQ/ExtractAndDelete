@@ -68,4 +68,34 @@ public sealed class MainViewModelTests
 
         Assert.Equal(path, parsed);
     }
+
+    [Fact]
+    public void InvalidPickerPath_DoesNotThrowAndCannotExecute()
+    {
+        MainViewModel viewModel = new();
+
+        viewModel.SetArchive("\0invalid.zip");
+        viewModel.SetParentDirectory("\0invalid-parent");
+
+        Assert.False(viewModel.CanExecute);
+        Assert.Null(viewModel.ArchivePath);
+        Assert.Null(viewModel.ParentDirectory);
+        Assert.Equal(StatusTone.Error, viewModel.StatusTone);
+    }
+
+    [Fact]
+    public void NonZipArchive_IsRejectedBeforeExecution()
+    {
+        using TemporaryDirectory temp = new();
+        string archivePath = Path.Combine(temp.Path, "not-a-zip.txt");
+        File.WriteAllText(archivePath, "placeholder");
+        MainViewModel viewModel = new();
+
+        viewModel.SetArchive(archivePath);
+        viewModel.SetParentDirectory(temp.Path);
+
+        Assert.False(viewModel.CanExecute);
+        Assert.Equal(StatusTone.Error, viewModel.StatusTone);
+        Assert.Contains("仅支持 ZIP", viewModel.StatusMessage);
+    }
 }

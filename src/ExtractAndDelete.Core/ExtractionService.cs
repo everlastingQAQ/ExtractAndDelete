@@ -32,6 +32,7 @@ public sealed class ExtractionService
         string? destinationPath = null;
         string? stagingPath = null;
         FileIdentity? originalIdentity = null;
+        bool destinationPublished = false;
 
         try
         {
@@ -141,6 +142,7 @@ public sealed class ExtractionService
                 // Both paths are generated/validated on the same volume, so this is atomic.
                 Directory.Move(stagingPath, destinationPath);
                 stagingPath = null;
+                destinationPublished = true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -236,6 +238,19 @@ public sealed class ExtractionService
         }
         catch (OperationCanceledException)
         {
+            if (destinationPublished)
+            {
+                return CreateResult(
+                    WorkflowOutcome.CleanupFailed,
+                    ErrorCode.Unexpected,
+                    "文件已完整解压，但源压缩包无法移入回收站，源文件已保留。",
+                    archivePath ?? request?.ArchivePath ?? string.Empty,
+                    destinationPath ?? request?.DestinationPath ?? string.Empty,
+                    File.Exists(archivePath) ? SourceDisposition.Retained : SourceDisposition.MissingOrChanged,
+                    "Cancellation was raised after publication began.",
+                    DestinationPublished: true);
+            }
+
             if (archivePath is null || destinationPath is null || stagingPath is null)
             {
                 return CreateResult(
@@ -273,19 +288,38 @@ public sealed class ExtractionService
         }
         catch (Exception ex)
         {
+            if (destinationPublished)
+            {
+                return CreateResult(
+                    WorkflowOutcome.CleanupFailed,
+                    ErrorCode.Unexpected,
+                    "文件已完整解压，但源压缩包无法移入回收站，源文件已保留。",
+                    archivePath ?? request?.ArchivePath ?? string.Empty,
+                    destinationPath ?? request?.DestinationPath ?? string.Empty,
+                    File.Exists(archivePath) ? SourceDisposition.Retained : SourceDisposition.MissingOrChanged,
+                    ex.ToString(),
+                    DestinationPublished: true);
+            }
+
+            bool stagingCleanupFailed = false;
             if (stagingPath is not null)
             {
-                TryDeleteStaging(stagingPath);
+                stagingCleanupFailed = !TryDeleteStaging(stagingPath);
             }
 
             return CreateResult(
                 WorkflowOutcome.ExtractionFailed,
-                ErrorCode.Unexpected,
-                "操作过程中发生未预期错误。",
+                stagingCleanupFailed ? ErrorCode.StagingCleanupFailed : ErrorCode.Unexpected,
+                stagingCleanupFailed
+                    ? $"操作失败，且临时目录清理失败，请手动处理：{stagingPath}"
+                    : "操作过程中发生未预期错误。",
                 archivePath ?? request?.ArchivePath ?? string.Empty,
                 destinationPath ?? request?.DestinationPath ?? string.Empty,
                 SourceDisposition.Retained,
-                ex.ToString());
+                CombineDiagnostics(
+                    ex.ToString(),
+                    stagingCleanupFailed ? $"Staging path: {stagingPath}" : null),
+                stagingCleanupFailed ? stagingPath : null);
         }
     }
 
@@ -390,14 +424,108 @@ public sealed class ExtractionService
 
             if (Directory.Exists(fullPath))
             {
-                Directory.Delete(fullPath, recursive: true);
+                if (!TryDeleteStagingDirectory(fullPath))
+                {
+                    return false;
+                }
             }
             else if (File.Exists(fullPath))
             {
-                File.Delete(fullPath);
+                // A staging path is always a directory. Do not delete an unexpected
+                // replacement file merely because its name matches our prefix.
+                return false;
             }
 
             return !Directory.Exists(fullPath) && !File.Exists(fullPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryDeleteStagingDirectory(string path)
+    {
+        FileAttributes rootAttributes;
+        try
+        {
+            rootAttributes = File.GetAttributes(path);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if ((rootAttributes & FileAttributes.ReparsePoint) != 0
+            || (rootAttributes & FileAttributes.Directory) == 0)
+        {
+            return false;
+        }
+
+        EnumerationOptions options = new()
+        {
+            RecurseSubdirectories = false,
+            AttributesToSkip = FileAttributes.None,
+            IgnoreInaccessible = false,
+            ReturnSpecialDirectories = false
+        };
+
+        IEnumerable<string> entries;
+        try
+        {
+            entries = Directory.EnumerateFileSystemEntries(path, "*", options);
+        }
+        catch
+        {
+            return false;
+        }
+
+        foreach (string entry in entries)
+        {
+            FileAttributes attributes;
+            try
+            {
+                attributes = File.GetAttributes(entry);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                // Never recurse through a junction or symlink during cleanup.
+                return false;
+            }
+
+            if ((attributes & FileAttributes.Directory) != 0)
+            {
+                if (!TryDeleteStagingDirectory(entry))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                try
+                {
+                    File.Delete(entry);
+                    if (File.Exists(entry))
+                    {
+                        return false;
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: false);
+            return !Directory.Exists(path);
         }
         catch
         {

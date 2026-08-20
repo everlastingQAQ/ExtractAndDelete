@@ -34,3 +34,4 @@ ExtractAndDelete.Cli.exe <zip路径> <最终目标目录>
 ## 设计文档
 
 完整架构、边界、测试和版本路线见 [docs/PROJECT_DESIGN.md](docs/PROJECT_DESIGN.md)。
+开发部署和干净 VM 验收矩阵见 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。

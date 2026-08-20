@@ -71,6 +71,27 @@ public sealed class ExtractionServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_CleanupThrows_ReportsPublishedCleanupFailure()
+    {
+        using TemporaryDirectory temp = new();
+        string zipPath = TestArchives.CreateZip(temp.Path, "source.zip", ("hello.txt", "Hello"));
+        string destinationPath = Path.Combine(temp.Path, "output");
+
+        ExtractAndDeleteResult result = await new ExtractionService(
+            new FakeArchiveExtractor(success: true),
+            new ThrowingCleanupService()).ExecuteAsync(
+            new ExtractAndDeleteRequest(zipPath, destinationPath),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.Equal(WorkflowOutcome.CleanupFailed, result.Outcome);
+        Assert.Equal(ErrorCode.Unexpected, result.ErrorCode);
+        Assert.True(result.DestinationPublished);
+        Assert.True(Directory.Exists(destinationPath));
+        Assert.True(File.Exists(zipPath));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ExistingDestination_IsRejectedWithoutModification()
     {
         using TemporaryDirectory temp = new();
@@ -274,5 +295,11 @@ public sealed class ExtractionServiceTests
                 ErrorCode.RecycleFailed,
                 "无法回收。"));
         }
+    }
+
+    private sealed class ThrowingCleanupService : ICleanupService
+    {
+        public Task<CleanupResult> MoveToRecycleBinAsync(string filePath) =>
+            throw new InvalidOperationException("simulated cleanup failure");
     }
 }

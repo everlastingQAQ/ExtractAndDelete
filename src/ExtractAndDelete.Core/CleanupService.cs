@@ -30,6 +30,9 @@ public sealed class CleanupService : ICleanupService
     private static readonly Guid FileOperationClassId =
         new("3ad05575-8857-4850-9277-11b85bdb8e09");
 
+    private static readonly Guid FileOperationInterfaceId =
+        new("947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8");
+
     private static readonly Guid ShellItemInterfaceId =
         new("43826d1e-e718-42ee-bc55-a1e261c37bfe");
 
@@ -95,7 +98,7 @@ public sealed class CleanupService : ICleanupService
 
     private static CleanupResult MoveOnSta(string filePath)
     {
-        object? operationObject = null;
+        IFileOperation? operation = null;
         IShellItem? shellItem = null;
 
         try
@@ -114,22 +117,20 @@ public sealed class CleanupService : ICleanupService
                     $"SHCreateItemFromParsingName HRESULT: 0x{shellItemHr:X8}");
             }
 
-            Type? operationType = Type.GetTypeFromCLSID(FileOperationClassId);
-            if (operationType is null)
+            Guid classId = FileOperationClassId;
+            Guid interfaceId = FileOperationInterfaceId;
+            int operationHr = CoCreateInstance(
+                ref classId,
+                IntPtr.Zero,
+                ClsctxInprocServer | ClsctxLocalServer,
+                ref interfaceId,
+                out operation);
+            if (operationHr < 0 || operation is null)
             {
                 return Failure(
                     ErrorCode.RecycleUnavailable,
                     "当前系统不支持回收站操作，源文件已保留。",
-                    "IFileOperation class is unavailable.");
-            }
-
-            operationObject = Activator.CreateInstance(operationType);
-            if (operationObject is not IFileOperation operation)
-            {
-                return Failure(
-                    ErrorCode.RecycleUnavailable,
-                    "当前系统不支持回收站操作，源文件已保留。",
-                    "IFileOperation COM activation returned an unexpected object.");
+                    $"IFileOperation activation HRESULT: 0x{operationHr:X8}");
             }
 
             int hr = operation.SetOperationFlags(OperationFlags);
@@ -199,9 +200,9 @@ public sealed class CleanupService : ICleanupService
                 Marshal.FinalReleaseComObject(shellItem);
             }
 
-            if (operationObject is not null && Marshal.IsComObject(operationObject))
+            if (operation is not null && Marshal.IsComObject(operation))
             {
-                Marshal.FinalReleaseComObject(operationObject);
+                Marshal.FinalReleaseComObject(operation);
             }
         }
     }
@@ -219,6 +220,17 @@ public sealed class CleanupService : ICleanupService
         ref Guid riid,
         [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
 
+    private const uint ClsctxInprocServer = 0x1;
+    private const uint ClsctxLocalServer = 0x4;
+
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(
+        ref Guid rclsid,
+        IntPtr pUnkOuter,
+        uint dwClsContext,
+        ref Guid riid,
+        [MarshalAs(UnmanagedType.Interface)] out IFileOperation ppv);
+
     [ComImport]
     [Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -227,7 +239,7 @@ public sealed class CleanupService : ICleanupService
     }
 
     [ComImport]
-    [Guid("3ad05575-8857-4850-9277-11b85bdb8e09")]
+    [Guid("947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IFileOperation
     {
@@ -250,10 +262,13 @@ public sealed class CleanupService : ICleanupService
         int SetProperties(IntPtr pproparray);
 
         [PreserveSig]
-        int ApplyPropertiesToItem(IShellItem psiItem, IntPtr pproparray);
+        int SetOwnerWindow(IntPtr hwndOwner);
 
         [PreserveSig]
-        int ApplyPropertiesToItems(IntPtr punkItems, IntPtr pproparray);
+        int ApplyPropertiesToItem(IShellItem psiItem);
+
+        [PreserveSig]
+        int ApplyPropertiesToItems(IntPtr punkItems);
 
         [PreserveSig]
         int RenameItem(
@@ -276,8 +291,7 @@ public sealed class CleanupService : ICleanupService
         [PreserveSig]
         int MoveItems(
             IntPtr punkItems,
-            IShellItem psiDestinationFolder,
-            IntPtr pfopsItem);
+            IShellItem psiDestinationFolder);
 
         [PreserveSig]
         int CopyItem(
@@ -289,8 +303,7 @@ public sealed class CleanupService : ICleanupService
         [PreserveSig]
         int CopyItems(
             IntPtr punkItems,
-            IShellItem psiDestinationFolder,
-            IntPtr pfopsItem);
+            IShellItem psiDestinationFolder);
 
         [PreserveSig]
         int DeleteItem(IShellItem psiItem, IntPtr pfopsItem);

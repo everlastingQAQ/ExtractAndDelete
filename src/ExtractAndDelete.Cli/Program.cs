@@ -7,10 +7,17 @@ if (args.Length != 2)
 }
 
 using CancellationTokenSource cancellationTokenSource = new();
+int canCancel = 0;
 ConsoleCancelEventHandler? cancelHandler = null;
 cancelHandler = (_, eventArgs) =>
 {
     eventArgs.Cancel = true;
+    if (Volatile.Read(ref canCancel) == 0)
+    {
+        Console.Error.WriteLine("当前阶段不可取消，正在等待安全操作完成……");
+        return;
+    }
+
     if (!cancellationTokenSource.IsCancellationRequested)
     {
         Console.Error.WriteLine("正在取消解压，请稍候清理临时目录……");
@@ -27,8 +34,12 @@ try
 {
     WorkflowStage? lastStage = null;
     string? lastEntry = null;
-    Progress<ExtractionProgress> progress = new(value =>
+    IProgress<ExtractionProgress> progress = new SynchronousProgress(value =>
     {
+        bool isCancelableStage = value.Stage is WorkflowStage.Scanning or WorkflowStage.Extracting;
+        Volatile.Write(
+            ref canCancel,
+            value.CanCancel && isCancelableStage ? 1 : 0);
         if (value.Stage != lastStage || !string.Equals(value.CurrentEntry, lastEntry, StringComparison.Ordinal))
         {
             lastStage = value.Stage;
@@ -80,3 +91,8 @@ static string GetStageMessage(WorkflowStage stage) => stage switch
     WorkflowStage.Completed => "已完成",
     _ => "正在处理"
 };
+
+sealed class SynchronousProgress(Action<ExtractionProgress> handler) : IProgress<ExtractionProgress>
+{
+    public void Report(ExtractionProgress value) => handler(value);
+}

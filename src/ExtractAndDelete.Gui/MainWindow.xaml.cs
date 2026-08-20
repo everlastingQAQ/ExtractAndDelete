@@ -1,11 +1,10 @@
-using ExtractAndDelete.Core;
 using ExtractAndDelete.Gui.ViewModels;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Windowing;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -16,11 +15,15 @@ public sealed partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; } = new();
 
+    private Task? _workflowTask;
+    private bool _allowClose;
+    private bool _closePromptShowing;
+
     public MainWindow()
     {
         InitializeComponent();
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
-        Closed += MainWindow_Closed;
+        AppWindow.Closing += MainWindow_Closing;
     }
 
     public void HandleActivation(string? archivePath)
@@ -67,7 +70,15 @@ public sealed partial class MainWindow : Window
 
     private async void ExecuteButton_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.ExecuteAsync();
+        _workflowTask = ViewModel.ExecuteAsync();
+        try
+        {
+            await _workflowTask;
+        }
+        finally
+        {
+            _workflowTask = null;
+        }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -88,18 +99,56 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    private async void MainWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (ViewModel.IsRunning && ViewModel.CanCancel)
+        if (_allowClose || !ViewModel.IsRunning)
         {
-            args.Handled = true;
-            ViewModel.SetStatus("正在取消解压并清理临时目录，请稍候。", StatusTone.Warning);
-            ViewModel.RequestCancellation();
+            return;
         }
-        else if (ViewModel.IsRunning)
+
+        args.Cancel = true;
+        if (!ViewModel.CanCancel)
         {
-            args.Handled = true;
             ViewModel.SetStatus("正在完成安全操作，请稍候。", StatusTone.Warning);
+            return;
+        }
+
+        if (_closePromptShowing)
+        {
+            return;
+        }
+
+        _closePromptShowing = true;
+        try
+        {
+            ContentDialog dialog = new()
+            {
+                Title = "确认退出",
+                Content = "解压正在进行，是否取消解压并退出？",
+                PrimaryButtonText = "取消解压并退出",
+                CloseButtonText = "继续解压",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            ViewModel.RequestCancellation();
+            if (_workflowTask is not null)
+            {
+                await _workflowTask;
+            }
+
+            _allowClose = true;
+            Close();
+        }
+        finally
+        {
+            _closePromptShowing = false;
         }
     }
 }

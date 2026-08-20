@@ -33,6 +33,7 @@ public enum ErrorCode
     DuplicateArchiveEntry,
     ArchiveEntryConflict,
     InsufficientDiskSpace,
+    ArchiveSizeOverflow,
     ExtractionIoFailure,
     PublishFailure,
     SourceChanged,
