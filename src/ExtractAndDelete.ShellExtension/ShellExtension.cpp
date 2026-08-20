@@ -23,14 +23,6 @@ namespace
             return false;
         }
 
-        SFGAOF attributes = 0;
-        if (FAILED(item->GetAttributes(SFGAO_FOLDER | SFGAO_STREAM, &attributes))
-            || (attributes & SFGAO_FOLDER) != 0
-            || (attributes & SFGAO_STREAM) == 0)
-        {
-            return false;
-        }
-
         PWSTR displayName = nullptr;
         if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &displayName)) || displayName == nullptr)
         {
@@ -254,8 +246,24 @@ namespace
             {
                 return E_POINTER;
             }
-            std::wstring path;
-            *state = GetSingleArchivePath(selection, path) ? ECS_ENABLED : ECS_DISABLED;
+            if (selection == nullptr)
+            {
+                // Explorer can ask for the command state while it is building a
+                // menu preview without a selection array. The manifest already
+                // limits this command to supported archive item types; defer the
+                // final path validation to Invoke instead of greying the command.
+                *state = ECS_ENABLED;
+                return S_OK;
+            }
+
+            DWORD count = 0;
+            if (FAILED(selection->GetCount(&count)))
+            {
+                *state = ECS_ENABLED;
+                return S_OK;
+            }
+
+            *state = count == 1 ? ECS_ENABLED : ECS_DISABLED;
             return S_OK;
         }
 

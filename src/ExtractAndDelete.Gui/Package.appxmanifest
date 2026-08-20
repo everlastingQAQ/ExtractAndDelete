@@ -3,9 +3,11 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  IgnorableNamespaces="uap desktop4 com desktop">
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop4 desktop5 com desktop rescap">
   <Identity
     Name="ExtractAndDelete"
     Publisher="CN=ExtractAndDelete Developer"
@@ -25,6 +27,9 @@
       MinVersion="10.0.22000.0"
       MaxVersionTested="10.0.26200.0" />
   </Dependencies>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
   <Applications>
     <Application
       Id="App"
@@ -34,37 +39,39 @@
         AppListEntry="default"
         DisplayName="Extract &amp; Delete"
         Description="安全解压并将源压缩包移入回收站"
+        BackgroundColor="#FFFFFF"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
       </uap:VisualElements>
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Extract &amp; Delete Shell Extension">
+              <com:Class
+                Id="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E"
+                Path="ExtractAndDelete.ShellExtension.dll"
+                ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type=".zip">
+              <desktop5:Verb Id="ExtractAndDelete" Clsid="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type=".7z">
+              <desktop5:Verb Id="ExtractAndDelete" Clsid="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type=".rar">
+              <desktop5:Verb Id="ExtractAndDelete" Clsid="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type=".tar">
+              <desktop5:Verb Id="ExtractAndDelete" Clsid="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
     </Application>
   </Applications>
-  <Extensions>
-    <com:Extension Category="windows.comServer">
-      <com:ComServer>
-        <com:InProcessServer>
-          <Path>ExtractAndDelete.ShellExtension.dll</Path>
-          <ThreadingModel>both</ThreadingModel>
-          <com:Class Id="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
-        </com:InProcessServer>
-      </com:ComServer>
-    </com:Extension>
-    <desktop4:Extension Category="windows.fileExplorerContextMenus">
-      <desktop4:FileExplorerContextMenus>
-        <desktop4:ItemType Type=".zip">
-          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
-        </desktop4:ItemType>
-        <desktop4:ItemType Type=".7z">
-          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
-        </desktop4:ItemType>
-        <desktop4:ItemType Type=".rar">
-          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
-        </desktop4:ItemType>
-        <desktop4:ItemType Type=".tar">
-          <desktop4:Verb Id="ExtractAndDelete" Clsid="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}" />
-        </desktop4:ItemType>
-      </desktop4:FileExplorerContextMenus>
-    </desktop4:Extension>
-  </Extensions>
 </Package>

@@ -9,24 +9,13 @@ $solutionPath = Join-Path $repoRoot 'ExtractAndDelete.slnx'
 $guiProjectPath = Join-Path $repoRoot 'src\ExtractAndDelete.Gui\ExtractAndDelete.Gui.csproj'
 $shellProjectPath = Join-Path $repoRoot 'src\ExtractAndDelete.ShellExtension\ExtractAndDelete.ShellExtension.vcxproj'
 
-$developerModeKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
-$developerMode = 0
-$unlockProperties = Get-ItemProperty -LiteralPath $developerModeKey -ErrorAction SilentlyContinue
-if ($null -ne $unlockProperties -and $unlockProperties.PSObject.Properties.Name -contains 'AllowDevelopmentWithoutDevLicense') {
-    $developerMode = [int]$unlockProperties.AllowDevelopmentWithoutDevLicense
-}
-if ($developerMode -ne 1) {
-    throw 'Windows Developer Mode is disabled. Enable it in Settings before deploying the Developer package.'
-}
-
 Push-Location $repoRoot
 try {
-    & (Join-Path $repoRoot 'scripts\verify-third-party.ps1')
+    & (Join-Path $repoRoot 'scripts\check-dev-environment.ps1')
 
-    $vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (-not (Test-Path -LiteralPath $vswherePath)) { throw 'vswhere.exe was not found.' }
+    $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+    $vswherePath = Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe'
     $msbuildPath = (& $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1)
-    if ([string]::IsNullOrWhiteSpace($msbuildPath) -or -not (Test-Path -LiteralPath $msbuildPath)) { throw 'x64 MSBuild/C++ toolchain was not found.' }
 
     & $msbuildPath $shellProjectPath /t:Restore /p:Configuration=Release /p:Platform=x64 /v:minimal
     if ($LASTEXITCODE -ne 0) { throw "Shell extension restore failed with exit code $LASTEXITCODE." }
@@ -42,14 +31,17 @@ try {
     $manifestPath = Join-Path $outputPath 'AppxManifest.xml'
     if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest was not produced: $manifestPath" }
 
+    & (Join-Path $repoRoot 'scripts\acceptance-check.ps1') -Configuration Release
+
     $existingPackages = @(Get-AppxPackage -Name 'ExtractAndDelete' -ErrorAction SilentlyContinue)
     foreach ($package in $existingPackages) {
         if ($package.Name -ne 'ExtractAndDelete') { throw "Refusing to remove an unexpected package identity: $($package.Name)" }
         Remove-AppxPackage -Package $package.PackageFullName
     }
 
-    Add-AppxPackage -Register -Path $manifestPath -DisableDevelopmentMode
-    Write-Host "Developer package registered from $manifestPath"
+    Add-AppxPackage -Register -Path $manifestPath
+    & (Join-Path $repoRoot 'scripts\verify-dev-install.ps1') -Configuration Release
+    Write-Host "Developer package registered and verified from $manifestPath"
 }
 finally {
     Pop-Location
