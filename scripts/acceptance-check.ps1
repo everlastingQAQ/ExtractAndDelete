@@ -32,6 +32,7 @@ foreach ($root in @($guiSevenZipRoot, $cliSevenZipRoot)) {
 $namespace = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
 $namespace.AddNamespace('foundation', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
 $namespace.AddNamespace('desktop4', 'http://schemas.microsoft.com/appx/manifest/desktop/windows10/4')
+$namespace.AddNamespace('desktop5', 'http://schemas.microsoft.com/appx/manifest/desktop/windows10/5')
 $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/windows10')
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
@@ -45,21 +46,26 @@ foreach ($assetName in @('StoreLogo.png', 'Square44x44Logo.png', 'Square71x71Log
     if (-not (Test-Path -LiteralPath $assetPath)) { throw "Package asset is missing: $assetPath" }
 }
 foreach ($extension in @('.zip', '.7z', '.rar', '.tar')) {
-    $verb = $manifest.SelectSingleNode("//desktop4:ItemType[@Type='$extension']/desktop4:Verb", $namespace)
+    $verb = $manifest.SelectSingleNode("//desktop5:ItemType[@Type='$extension']/desktop5:Verb", $namespace)
     if ($null -eq $verb -or $verb.Id -ne 'ExtractAndDelete') {
         throw "The $extension Explorer command is missing."
     }
 }
-$comClass = $manifest.SelectSingleNode('//com:Class[@Id="{4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E}"]', $namespace)
+$comClass = $manifest.SelectSingleNode('//com:Class[@Id="4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E"]', $namespace)
 if ($null -eq $comClass) { throw 'The Shell Extension COM class is missing.' }
+if ($comClass.Path -ne 'ExtractAndDelete.ShellExtension.dll' -or $comClass.ThreadingModel -ne 'STA') {
+    throw 'The Shell Extension COM class path or STA threading model is invalid.'
+}
 
-$forbiddenArtifacts = @(Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Include '*.pfx', '*.msix', '*.msixbundle' -ErrorAction SilentlyContinue)
+$forbiddenArtifacts = @(Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Include '*.pfx', '*.cer', '*.msix', '*.msixbundle', '*.appinstaller' -ErrorAction SilentlyContinue)
 if ($forbiddenArtifacts.Count -ne 0) {
     $paths = $forbiddenArtifacts | ForEach-Object FullName
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V2 Developer RC layout checks passed.'
+Write-Host 'V2 Developer RC output layout checks passed.'
+Write-Host 'Package registration was not checked.'
+Write-Host 'Run scripts\verify-dev-install.ps1 after deploy-dev.ps1.'
 Write-Host "Package identity: $($identity.Name)"
 Write-Host "GUI output: $guiOutput"
 Write-Host "Shell extension: $shellPath"
