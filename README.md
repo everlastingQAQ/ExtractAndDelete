@@ -10,7 +10,7 @@
 只有解压完整成功且回收成功 → 工作流完成
 ```
 
-当前状态：V1 已进入 `main`；V2 正在将解压引擎切换为随应用内置的 7-Zip 26.02 x64，并扩展 ZIP、7Z、RAR、TAR。Developer RC 的真实 Shell DLL 构建和 VM 验收需要 Windows 11 x64、Developer Mode、Native Desktop/Windows SDK。
+当前状态：V2 的 Core、GUI、CLI、Explorer Shell 和内置 7-Zip 26.02 x64 已实现。项目交付形态仍是 Windows 11 x64 Developer RC；真实 Shell DLL 部署和干净 VM 验收需要 Developer Mode、Native Desktop/Windows SDK。
 
 ## 构建和测试
 
@@ -30,6 +30,8 @@ ExtractAndDelete.Cli.exe <压缩包路径> <最终目标目录>
 ```
 
 开发部署使用 `.\scripts\deploy-dev.ps1`，注销使用 `.\scripts\uninstall-dev.ps1`。脚本只处理固定的 `ExtractAndDelete` package identity，不会搜索或删除其他包。
+
+完整安装、GUI、Explorer 右键菜单、CLI、支持格式和常见问题见 [docs/USAGE.md](docs/USAGE.md)。
 
 ## 设计文档
 
