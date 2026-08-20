@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <WindowsAppSdkAutoInitialize>false</WindowsAppSdkAutoInitialize>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\ExtractAndDelete.Core\ExtractAndDelete.Core.csproj" />
+    <ProjectReference Include="..\src\ExtractAndDelete.Gui.ViewModels\ExtractAndDelete.Gui.ViewModels.csproj" />
   </ItemGroup>
 
   <ItemGroup>

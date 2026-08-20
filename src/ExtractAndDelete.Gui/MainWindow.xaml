@@ -1,0 +1,47 @@
+<Window
+    x:Class="ExtractAndDelete.Gui.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Extract &amp; Delete">
+    <ScrollViewer>
+        <StackPanel Spacing="12" Padding="28" MaxWidth="760">
+            <TextBlock Text="Extract &amp; Delete" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="仅在完整解压成功后，源 ZIP 才会移入回收站。" TextWrapping="Wrap" />
+
+            <TextBlock Text="压缩包" Margin="0,16,0,0" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ArchivePath, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="压缩包路径" />
+                <Button Grid.Column="1" Content="选择 ZIP" Click="ChooseArchiveButton_Click" IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}" AutomationProperties.Name="选择 ZIP" />
+            </Grid>
+
+            <TextBlock Text="目标父目录" Margin="0,8,0,0" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ParentDirectory, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="目标父目录路径" />
+                <Button Grid.Column="1" Content="选择文件夹" Click="ChooseFolderButton_Click" IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}" AutomationProperties.Name="选择目标父目录" />
+            </Grid>
+
+            <TextBlock Text="最终目录" Margin="0,8,0,0" />
+            <TextBox Text="{x:Bind ViewModel.DestinationPath, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="最终目录路径" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+                <Button Content="解压并回收" Click="ExecuteButton_Click" IsEnabled="{x:Bind ViewModel.CanExecute, Mode=OneWay}" AutomationProperties.Name="解压并回收" />
+                <Button Content="取消" Click="CancelButton_Click" IsEnabled="{x:Bind ViewModel.CanCancel, Mode=OneWay}" AutomationProperties.Name="取消解压" />
+            </StackPanel>
+
+            <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercentage, Mode=OneWay}" Margin="0,12,0,0" AutomationProperties.Name="解压进度" />
+            <TextBlock Text="{x:Bind ViewModel.CurrentEntry, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="当前文件" />
+            <TextBlock x:Name="StatusTextBlock" Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="状态与错误信息" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>
