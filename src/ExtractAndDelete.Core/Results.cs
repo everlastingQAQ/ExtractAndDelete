@@ -41,7 +41,18 @@ public enum ErrorCode
     RecycleFailed,
     StagingCleanupFailed,
     Cancelled,
-    Unexpected
+    Unexpected,
+    ArchiveEncrypted,
+    MultiVolumeArchiveNotSupported,
+    UnsupportedArchiveEntryType,
+    ArchiveTooComplex,
+    ArchiveEngineUnavailable,
+    ArchiveEngineIntegrityFailure,
+    ArchiveEngineProtocolFailure,
+    ArchiveEngineProcessFailure,
+    ArchiveEngineTerminationFailure,
+    ArchiveVerificationFailure,
+    InsufficientMemory
 }
 
 public enum SourceDisposition
@@ -49,6 +60,15 @@ public enum SourceDisposition
     Recycled,
     Retained,
     MissingOrChanged
+}
+
+public enum StagingCleanupState
+{
+    NotCreated,
+    ReadyForPublish,
+    Cleaned,
+    RetainedForSafety,
+    CleanupFailed
 }
 
 public sealed record ExtractAndDeleteRequest(
@@ -62,7 +82,8 @@ public sealed record ExtractionProgress(
     int TotalEntries,
     long CompletedBytes,
     long TotalBytes,
-    bool CanCancel)
+    bool CanCancel,
+    bool IsIndeterminate = false)
 {
     public double Percentage => TotalBytes <= 0
         ? (TotalEntries == 0 ? 0 : (double)CompletedEntries / TotalEntries * 100)
@@ -73,7 +94,10 @@ public sealed record ArchiveExtractionResult(
     bool Success,
     ErrorCode ErrorCode,
     string UserMessage,
-    string? DiagnosticMessage = null)
+    string? DiagnosticMessage = null,
+    StagingCleanupState StagingCleanupState = StagingCleanupState.NotCreated,
+    string? StagingPath = null,
+    int? EngineExitCode = null)
 {
     public string? ErrorMessage => Success ? null : UserMessage;
 }

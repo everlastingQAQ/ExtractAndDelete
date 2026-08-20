@@ -21,7 +21,9 @@ public sealed class ExtractionService
     }
 
     public static ExtractionService CreateDefault() =>
-        new(new ArchiveExtractor(), new CleanupService());
+        new(
+            new SevenZipArchiveExtractor(SevenZipToolProvider.CreateDefault()),
+            new CleanupService());
 
     public async Task<ExtractAndDeleteResult> ExecuteAsync(
         ExtractAndDeleteRequest? request,
@@ -75,7 +77,12 @@ public sealed class ExtractionService
 
             if (!extractionResult.Success)
             {
-                bool stagingCleanupFailed = !TryDeleteStaging(stagingPath!);
+                bool processTerminationUnsafe =
+                    extractionResult.StagingCleanupState == StagingCleanupState.RetainedForSafety;
+                bool stagingCleanupFailed = !processTerminationUnsafe && !TryDeleteStaging(stagingPath!);
+                string? retainedStagingPath = processTerminationUnsafe || stagingCleanupFailed
+                    ? extractionResult.StagingPath ?? stagingPath
+                    : null;
                 return CreateResult(
                     extractionResult.ErrorCode == ErrorCode.Cancelled
                         ? WorkflowOutcome.Cancelled
@@ -83,16 +90,18 @@ public sealed class ExtractionService
                     stagingCleanupFailed
                         ? ErrorCode.StagingCleanupFailed
                         : extractionResult.ErrorCode,
-                    stagingCleanupFailed
-                        ? $"{extractionResult.UserMessage} 临时目录清理失败，请手动处理：{stagingPath}"
+                    processTerminationUnsafe
+                        ? $"{extractionResult.UserMessage} 7-Zip 进程未能确认停止，请手动处理临时目录：{retainedStagingPath}"
+                        : stagingCleanupFailed
+                        ? $"{extractionResult.UserMessage} 临时目录清理失败，请手动处理：{retainedStagingPath}"
                         : extractionResult.UserMessage,
                     archivePath,
                     destinationPath,
                     SourceDisposition.Retained,
                     CombineDiagnostics(
                         extractionResult.DiagnosticMessage,
-                        stagingCleanupFailed ? $"Staging path: {stagingPath}" : null),
-                    stagingCleanupFailed ? stagingPath : null);
+                        retainedStagingPath is not null ? $"Staging path: {retainedStagingPath}" : null),
+                    retainedStagingPath);
             }
 
             FileIdentity? identityBeforePublish = FileIdentityReader.TryRead(archivePath);
@@ -342,11 +351,11 @@ public sealed class ExtractionService
             ErrorCode.InvalidDestination,
             "最终目标目录路径无效。");
 
-        if (!archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        if (!SupportedArchiveFormats.TryResolve(archivePath, out _))
         {
             throw new ValidationException(
                 ErrorCode.UnsupportedFormat,
-                "当前版本仅支持 ZIP 压缩包。");
+                "当前版本仅支持 ZIP、7Z、RAR 和 TAR 压缩包。");
         }
 
         if (!File.Exists(archivePath))

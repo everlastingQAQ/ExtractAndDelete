@@ -24,4 +24,15 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\third_party\7zip\26.02\x64\7z.exe"
+          Link="ThirdParty\7-Zip\7z.exe"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\third_party\7zip\26.02\x64\7z.dll"
+          Link="ThirdParty\7-Zip\7z.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
