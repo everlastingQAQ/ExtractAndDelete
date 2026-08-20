@@ -211,9 +211,9 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter 
 
 `scripts/verify.ps1` 会额外用 MSBuild 构建 x64 C++ Shell Extension，再执行相同的 Release 构建和普通测试。它要求 Visual Studio Native Desktop、x64 MSVC 和 Windows SDK；真实回收站测试使用 `Category=WindowsIntegration` 单独运行。
 
-`scripts/deploy-dev.ps1` 在 Developer Mode 下构建并注册准确的 package manifest；`scripts/uninstall-dev.ps1` 只注销固定 `ExtractAndDelete` identity。仓库不包含 `.pfx`、签名包或正式发布配置。
+`scripts/check-dev-environment.ps1` 只读检查 Developer Mode、Windows build、.NET SDK、Visual Studio/MSBuild、x64 工具链和 Windows SDK；`scripts/deploy-dev.ps1` 在 Developer Mode 下先完成构建输出验证，再注册准确的 package manifest，并在注册后调用 `scripts/verify-dev-install.ps1`；`scripts/uninstall-dev.ps1` 只注销固定 `ExtractAndDelete` identity 并确认注销结果。仓库不包含 `.pfx`、签名包或正式发布配置。
 
-`scripts/verify-third-party.ps1` 检查固定 7-Zip 二进制和许可证哈希；`scripts/acceptance-check.ps1` 检查自包含 x64 输出（无外部 Windows App Runtime 依赖且包含 runtime DLL/PNG 资源）、固定包身份、四种菜单、GUI/CLI 中的 7-Zip 文件和仓库中没有证书/签名包。所有脚本均使用精确路径和固定包身份，不搜索或卸载其他包。
+`scripts/verify-third-party.ps1` 检查固定 7-Zip 二进制和许可证哈希；`scripts/acceptance-check.ps1` 只检查自包含 x64 输出（无外部 Windows App Runtime 依赖且包含 runtime DLL/PNG 资源）、固定包身份、四种菜单、GUI/CLI 中的 7-Zip 文件和仓库中没有证书/签名包，不检查 package 注册；`scripts/verify-dev-install.ps1` 单独检查当前用户的 package 状态、安装目录、清单版本、固定 CLSID、四种菜单和注册目录文件。所有脚本均使用精确路径和固定包身份，不搜索或卸载其他包。
 
 ## 11. 开发流程
 

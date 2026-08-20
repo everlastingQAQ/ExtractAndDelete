@@ -69,16 +69,26 @@
 在仓库根目录 `D:\project\ExtractAndDelete` 打开 PowerShell，按顺序执行：
 
 ```powershell
+.\scripts\check-dev-environment.ps1
 .\scripts\verify.ps1
 .\scripts\deploy-dev.ps1
+.\scripts\verify-dev-install.ps1
+```
+
+四个脚本的作用：
+
+1. `check-dev-environment.ps1`：只读检查 Developer Mode、Windows build、.NET SDK、Visual Studio/MSBuild、x64 工具链和 Windows SDK。
+2. `verify.ps1`：验证内置 7-Zip 文件哈希，Restore，构建 Release 的 Core、CLI、WinUI 和 x64 Explorer DLL，并运行普通测试。
+3. `deploy-dev.ps1`：重新构建 x64 Shell DLL，发布自包含 WinUI GUI，验证输出后注册准确的 `ExtractAndDelete` package identity。
+4. `verify-dev-install.ps1`：只读检查 package 是否真的注册、状态是否为 `Ok`、清单和安装目录是否正确。
+
+`acceptance-check.ps1` 只检查磁盘上的构建输出布局，不检查 package 是否已注册。部署脚本会自动运行它；需要单独检查布局时执行：
+
+```powershell
 .\scripts\acceptance-check.ps1
 ```
 
-三个脚本的作用：
-
-1. `verify.ps1`：验证内置 7-Zip 文件哈希，Restore，构建 Release 的 Core、CLI、WinUI 和 x64 Explorer DLL，并运行普通测试。
-2. `deploy-dev.ps1`：重新构建 x64 Shell DLL，发布自包含 WinUI GUI，并注册准确的 `ExtractAndDelete` package identity。
-3. `acceptance-check.ps1`：检查自包含输出、内置引擎、四种格式清单和签名文件排除情况。
+它会明确提示：`Package registration was not checked.`
 
 注册完成后，从开始菜单启动 **Extract & Delete**。也可以在资源管理器中对一个支持的压缩包打开 Windows 11 现代右键菜单，选择 **解压并回收**。
 
@@ -96,7 +106,7 @@
 .\scripts\uninstall-dev.ps1
 ```
 
-该脚本只处理固定的 `ExtractAndDelete` package identity，不搜索、不卸载其他应用。注销后如果资源管理器仍显示旧菜单，重启资源管理器或重新登录 Windows。
+该脚本只处理固定的 `ExtractAndDelete` package identity，不搜索、不卸载其他应用。注销后脚本会确认 package 已不存在；如果资源管理器仍显示旧菜单，重启资源管理器或重新登录 Windows。
 
 ## 4. GUI 使用方法
 
@@ -252,6 +262,28 @@ ExtractAndDelete.Cli.exe <压缩包路径> <最终目标目录>
 
 确认已运行 `deploy-dev.ps1` 且没有报错。该菜单只在已注册 packaged app 后出现，并且只针对单个四格式压缩包。注销或升级后若菜单缓存未刷新，重启 Windows Explorer 或重新登录。
 
+### 部署失败或出现 AppX HRESULT
+
+先按顺序重新运行 `check-dev-environment.ps1`、`verify.ps1`，确认 Developer Mode 和输出布局均通过，再重试 `deploy-dev.ps1`。几个常见情况：
+
+- `0x80073CF9`：通常表示注册条件不满足、清单或输出目录不完整，或仍使用了不适用于本开发包的注册参数。确认 Developer Mode 值为 `1`，并使用仓库脚本注册准确的 `AppxManifest.xml`，不要手工注册其他目录。
+- `0x80073D02` 或提示文件正在使用：通常是 Explorer/COM Surrogate 正在锁定旧的 Shell DLL。关闭相关 Explorer 窗口，重启 Windows Explorer；确认锁定进程确实属于本项目后再重试，不要终止不相关的 `dllhost.exe`。
+- `0x80070005`：表示权限或安全软件阻止了 AppX 注册。不要通过管理员提权或修改系统范围 COM 注册表绕过；检查当前用户 Developer Mode 和 Windows AppX 部署日志。
+
+如需查看本次注册的详细日志，可在部署命令失败后立即记录命令输出中的 ActivityId，并执行：
+
+```powershell
+Get-AppPackageLog -ActivityID <ActivityId>
+```
+
+也可以在事件查看器中打开：
+
+```text
+应用和服务日志 → Microsoft → Windows → AppXDeployment-Server → Operational
+```
+
+修复后使用 `verify-dev-install.ps1` 确认 package 状态为 `Ok`；`acceptance-check.ps1` 只代表磁盘输出布局通过，不能替代注册检查。
+
 ### 应用运行中再次右键另一个压缩包
 
 V2 是单实例、单任务设计。现有窗口会前置并提示已有任务正在进行，不会替换当前路径，也不会排队第二个任务。等待当前任务结束后再开始下一次操作。
@@ -261,7 +293,9 @@ V2 是单实例、单任务设计。现有窗口会前置并提示已有任务�
 - [项目总设计文档](PROJECT_DESIGN.md)：架构、边界、安全语义和 V2 技术路线。
 - [Developer RC 验收说明](ACCEPTANCE.md)：自动检查、真实回收站测试和干净 VM 验收矩阵。
 - [`scripts/verify.ps1`](../scripts/verify.ps1)：构建与普通测试入口。
+- [`scripts/check-dev-environment.ps1`](../scripts/check-dev-environment.ps1)：Developer Mode 和本地工具链预检入口。
 - [`scripts/deploy-dev.ps1`](../scripts/deploy-dev.ps1)：Developer Mode 注册入口。
+- [`scripts/verify-dev-install.ps1`](../scripts/verify-dev-install.ps1)：已注册 package 状态检查入口。
 - [`scripts/uninstall-dev.ps1`](../scripts/uninstall-dev.ps1)：精确注销本项目 package。
 - [`scripts/verify-third-party.ps1`](../scripts/verify-third-party.ps1)：验证内置 7-Zip 二进制与许可证哈希。
 
