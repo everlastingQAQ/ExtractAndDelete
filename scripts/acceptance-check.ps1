@@ -1,13 +1,21 @@
 [CmdletBinding()]
 param(
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\net10.0-windows10.0.22000.0\win-x64"
+$releaseConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'release-config.json') -Raw | ConvertFrom-Json
+$expectedPackageVersion = [string]$releaseConfig.packageVersion
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    $guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\net10.0-windows10.0.22000.0\win-x64"
+}
+else {
+    $guiOutput = [IO.Path]::GetFullPath($OutputPath)
+}
 $manifestPath = Join-Path $guiOutput 'AppxManifest.xml'
 $shellPath = Join-Path $guiOutput 'ExtractAndDelete.ShellExtension.dll'
 $guiExePath = Join-Path $guiOutput 'ExtractAndDelete.Gui.exe'
@@ -31,7 +39,8 @@ $requiredGuiFiles = @(
     $guiExePath,
     (Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'),
     (Join-Path $guiOutput 'ThirdParty\7-Zip\licenses\License.txt'),
-    (Join-Path $guiOutput 'THIRD-PARTY-NOTICES.md')
+    (Join-Path $guiOutput 'THIRD-PARTY-NOTICES.md'),
+    (Join-Path $guiOutput 'LICENSE')
 )
 foreach ($requiredFile in $requiredGuiFiles) {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
@@ -62,7 +71,7 @@ $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/w
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
 if ($null -eq $identity -or $identity.Name -ne 'ExtractAndDelete') { throw 'Package identity is not ExtractAndDelete.' }
-if ($identity.Version -ne '4.0.0.0') { throw "Package version is not V4 4.0.0.0: $($identity.Version)" }
+if ($identity.Version -ne $expectedPackageVersion) { throw "Package version is not V4.1 $($expectedPackageVersion): $($identity.Version)" }
 $runtimeDependency = $manifest.SelectSingleNode('//foundation:PackageDependency[contains(@Name, "WindowsAppRuntime")]', $namespace)
 if ($null -ne $runtimeDependency) { throw 'The package still depends on an external Windows App SDK runtime.' }
 $runtimeDll = Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'
@@ -89,7 +98,7 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V4 Developer RC output layout checks passed.'
+Write-Host 'V4.1 Developer Preview output layout checks passed.'
 Write-Host 'Package registration was not checked.'
 Write-Host 'Run scripts\verify-dev-install.ps1 after deploy-dev.ps1.'
 Write-Host "Package identity: $($identity.Name)"

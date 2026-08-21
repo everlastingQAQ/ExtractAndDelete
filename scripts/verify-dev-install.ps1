@@ -1,16 +1,16 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string]$ExpectedInstallLocation
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\net10.0-windows10.0.22000.0\win-x64"
-$manifestPath = Join-Path $guiOutput 'AppxManifest.xml'
-
+$releaseConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'release-config.json') -Raw | ConvertFrom-Json
+$expectedPackageVersion = [string]$releaseConfig.packageVersion
 function Fail([string]$message) {
     throw "Developer package 注册检查失败：$message"
 }
@@ -27,17 +27,27 @@ $package = $packages[0]
 if ($package.Name -ne 'ExtractAndDelete') {
     Fail "发现了意外的 package identity：$($package.Name)。"
 }
+if ([string]$package.Version -ne $expectedPackageVersion) {
+    Fail "package 版本不匹配，预期 $expectedPackageVersion：$($package.Version)。"
+}
+if ([string]$package.PackageFamilyName -ne [string]$releaseConfig.packageFamilyName) {
+    Fail "package Family Name 不匹配，预期 $($releaseConfig.packageFamilyName)：$($package.PackageFamilyName)。"
+}
 if ([string]$package.Status -ne 'Ok') {
     Fail "package 状态不是 Ok：$($package.Status)。"
 }
-if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-    Fail "发布清单不存在：$manifestPath。"
-}
 
 $registeredPath = [IO.Path]::GetFullPath([string]$package.InstallLocation).TrimEnd('\')
-$expectedPath = [IO.Path]::GetFullPath($guiOutput).TrimEnd('\')
-if (-not [string]::Equals($registeredPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
-    Fail "package 安装目录不匹配。实际：$registeredPath；预期：$expectedPath。"
+$guiOutput = $registeredPath
+if (-not [string]::IsNullOrWhiteSpace($ExpectedInstallLocation)) {
+    $expectedPath = [IO.Path]::GetFullPath($ExpectedInstallLocation).TrimEnd('\')
+    if (-not [string]::Equals($registeredPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+        Fail "package 安装目录不匹配。实际：$registeredPath；预期：$expectedPath。"
+    }
+}
+$manifestPath = Join-Path $registeredPath 'AppxManifest.xml'
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    Fail "注册目录清单不存在：$manifestPath。"
 }
 
 [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -57,8 +67,12 @@ if ($identity.Name -ne 'ExtractAndDelete') {
 if ($identity.Publisher -ne 'CN=ExtractAndDelete Developer') {
     Fail "清单 Publisher 不匹配：$($identity.Publisher)。"
 }
-if ($identity.Version -ne '4.0.0.0') {
-    Fail "清单 Version 不匹配，预期 V4 4.0.0.0：$($identity.Version)。"
+if ($identity.Version -ne $expectedPackageVersion) {
+    Fail "清单 Version 不匹配，预期 V4.1 $expectedPackageVersion：$($identity.Version)。"
+}
+$displayName = $manifest.SelectSingleNode('/foundation:Package/foundation:Properties/foundation:DisplayName', $namespace)
+if ($null -eq $displayName -or [string]$displayName.InnerText -ne 'Extract & Delete（系统集成组件）') {
+    Fail 'package Properties DisplayName 不是“Extract & Delete（系统集成组件）”。'
 }
 
 $application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
@@ -90,6 +104,7 @@ $requiredFiles = @(
     'ThirdParty\7-Zip\7z.dll',
     'ThirdParty\7-Zip\licenses\License.txt',
     'THIRD-PARTY-NOTICES.md',
+    'LICENSE',
     'Assets\StoreLogo.png',
     'Assets\Square44x44Logo.png',
     'Assets\Square71x71Logo.png',

@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'release-config.json') -Raw | ConvertFrom-Json
+$expectedPackageVersion = [string]$releaseConfig.packageVersion
 $solutionPath = Join-Path $repoRoot 'ExtractAndDelete.slnx'
 $guiProjectPath = Join-Path $repoRoot 'src\ExtractAndDelete.Gui\ExtractAndDelete.Gui.csproj'
 $shellProjectPath = Join-Path $repoRoot 'src\ExtractAndDelete.ShellExtension\ExtractAndDelete.ShellExtension.vcxproj'
@@ -38,7 +40,8 @@ try {
         'ThirdParty\7-Zip\7z.exe',
         'ThirdParty\7-Zip\7z.dll',
         'ThirdParty\7-Zip\licenses\License.txt',
-        'THIRD-PARTY-NOTICES.md')) {
+        'THIRD-PARTY-NOTICES.md',
+        'LICENSE')) {
         $requiredPath = Join-Path $outputPath $requiredRelativePath
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
             throw "Required V4 package file is missing: $requiredPath"

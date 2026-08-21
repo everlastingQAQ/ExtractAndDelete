@@ -11,7 +11,7 @@ function Fail([string]$message) {
 }
 
 if (-not [Environment]::Is64BitOperatingSystem) {
-    Fail '当前系统不是 x64。V4 Developer RC 只支持 Windows 11 x64。'
+    Fail '当前系统不是 x64。Extract & Delete 4.1 Developer Preview 只支持 Windows 11 x64。'
 }
 
 $os = Get-CimInstance -ClassName Win32_OperatingSystem

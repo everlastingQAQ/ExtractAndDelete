@@ -11,9 +11,9 @@
   <Identity
     Name="ExtractAndDelete"
     Publisher="CN=ExtractAndDelete Developer"
-    Version="4.0.0.0" />
+    Version="4.1.0.0" />
   <Properties>
-    <DisplayName>Extract &amp; Delete</DisplayName>
+    <DisplayName>Extract &amp; Delete（系统集成组件）</DisplayName>
     <PublisherDisplayName>Extract &amp; Delete</PublisherDisplayName>
     <Description>安全解压并将源压缩包移入回收站</Description>
     <Logo>Assets\StoreLogo.png</Logo>
