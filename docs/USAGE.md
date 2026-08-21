@@ -1,86 +1,93 @@
-# Extract & Delete V4 使用文档
+# Extract & Delete 4.1 使用文档
 
-V4 是 Windows 11 x64 Developer Mode packaged 应用，版本 `4.0.0.0`。可见窗口使用 WinForms/Win32 原生控件，按 Windows 11 中文“提取压缩(Zipped)文件夹”向导布局绘制；真正的目录合并、冲突、错误、进度和 UAC 由 Windows Shell 文件操作处理。
+`Extract & Delete 4.1.0 Developer Preview` 是一个面向 Windows 11 x64 的单 EXE 安装版本。它仍需要 Windows Developer Mode；安装器未使用生产 Authenticode 签名，因此 SmartScreen 可能显示“未知发布者”警告。
 
-当前没有正式签名安装包，也没有 MSI、AppInstaller、便携 EXE 或 CLI 交付物。使用前必须在 Windows 设置中开启 Developer Mode。
-
-## 1. 安全行为
+普通用户只需要从 GitHub Release 下载并运行：
 
 ```text
-选择压缩包
-→ 计算或编辑准确目标路径
-→ 7-Zip 扫描并验证
-→ 写入受控 staging
-→ Windows Shell 创建/合并目标并处理冲突
-→ 检查逐项结果和 aborted 状态
-→ 完整发布且没有跳过时验证源文件身份
-→ 将源压缩包移入回收站
+ExtractAndDelete-Setup-4.1.0-x64.exe
 ```
 
-- 扫描或 staging 解压失败/取消：目标不改变，staging 尽力清理，源包保留。
-- Windows 发布取消/失败：Shell 已经写入的部分目标可以保留，不回滚，不回收源包。
-- 任意条目选择跳过：目标保留已完成内容，源包保留。
-- 替换或保留两者并完成所有条目：视为完整发布，可以回收源包。
-- 回收失败：目标和源包都保留，不永久删除、不自动提权。
-- 源文件身份在开始、发布前或回收前发生变化：不执行回收。
+不需要克隆仓库、安装 Visual Studio、.NET、Windows App SDK 或系统 7-Zip。安装器将自包含的 GUI、Shell Extension、Windows App SDK、.NET 运行时和 7-Zip 26.02 放入当前用户目录：
 
-## 2. 支持范围
+```text
+%LOCALAPPDATA%\Programs\ExtractAndDelete
+```
 
-支持 `.zip`、`.7z`、`.rar`、`.tar`，扩展名大小写不敏感。压缩引擎为包内官方 7-Zip 26.02 x64，不读取系统 PATH，也不要求系统另外安装 7-Zip。
-
-不支持密码/加密包、分卷包、`.tar.gz` 等复合扩展名、批量任务、Windows 10 和 ARM64。
-
-## 3. 安装和开发部署
-
-要求：
+## 1. 安装前提
 
 - Windows 11 x64，build 不低于 22000。
 - Developer Mode 已开启。
-- .NET SDK 10.0.400 feature band。
-- Visual Studio C++ x64、Windows SDK 和 Windows App SDK/WinUI 构建工具。
+- 当前用户对 `%LOCALAPPDATA%` 有写入权限。
+- 安装期间 Extract & Delete 不在运行。
 
-在仓库根目录按顺序执行：
+安装器不会自动开启 Developer Mode、导入证书、请求管理员权限、关闭 Explorer 或强制结束解压任务。
 
-```powershell
-.\scripts\check-dev-environment.ps1
-.\scripts\verify.ps1
-.\scripts\deploy-dev.ps1
-.\scripts\verify-dev-install.ps1
+### 开启 Developer Mode
+
+打开：
+
+```text
+设置 → 系统 → 面向开发人员 → 开发人员模式
 ```
 
-脚本职责：
+安装器发现未开启时会停止在预检页，并提供“打开开发者设置”和“重新检测”。开启后回到安装器重新检测即可。
 
-1. `check-dev-environment.ps1` 只读检查系统、Developer Mode、SDK、MSBuild、x64 MSVC、Windows SDK 和 7-Zip 哈希。
-2. `verify.ps1` 构建 Core、WinForms GUI、x64 Shell DLL，并运行普通测试；不构建 CLI。
-3. `acceptance-check.ps1` 只检查 Release 输出布局、V4 清单、包内 7-Zip、Shell DLL 和自包含运行时；不检查 package 是否注册。
-4. `deploy-dev.ps1` 在构建和输出检查完成后，只注销并注册固定 `ExtractAndDelete` package。
-5. `verify-dev-install.ps1` 只读检查当前用户 package：`Name=ExtractAndDelete`、`Version=4.0.0.0`、`Status=Ok`、`App Id=App`、固定 CLSID、四种 Explorer verb 和注册目录文件。
+## 2. 下载、校验和安装
 
-注销：
+1. 在 GitHub Release 下载 `ExtractAndDelete-Setup-4.1.0-x64.exe` 和同名 `.sha256` 文件。
+2. 可选地在 PowerShell 中校验：
+
+   ```powershell
+   Get-FileHash .\ExtractAndDelete-Setup-4.1.0-x64.exe -Algorithm SHA256
+   Get-Content .\ExtractAndDelete-Setup-4.1.0-x64.exe.sha256
+   ```
+
+3. 双击 EXE。若 SmartScreen 显示未知发布者，确认文件来自本项目的 GitHub Release 后选择“更多信息 → 仍要运行”。
+4. 安装器显示固定的当前用户目录；目录不可修改，不创建桌面快捷方式，不请求 UAC。
+5. 阅读 Developer Preview 提示并开始安装。
+6. 完成页默认勾选“运行 Extract & Delete”；取消勾选则只完成安装。
+
+安装成功后：
+
+- 开始菜单显示 `Extract & Delete`。
+- Explorer 对单个 ZIP、7Z、RAR 或 TAR 显示“解压并回收”。
+- 系统不需要另装 7-Zip、.NET 或 Windows App SDK Runtime。
+
+可用 PowerShell 确认 package：
 
 ```powershell
-.\scripts\uninstall-dev.ps1
+Get-AppxPackage -Name ExtractAndDelete |
+    Select-Object Name, PackageFullName, Version, Status, InstallLocation
 ```
 
-注销后重启 Explorer 或重新登录，以刷新开始菜单和现代右键菜单缓存。
+预期为 `Name=ExtractAndDelete`、`Version=4.1.0.0`、`Status=Ok`，安装目录末尾为 `app-4.1.0.0`。
 
-## 4. GUI 使用
+## 3. 升级、修复和迁移
 
-### 4.1 开始菜单启动
+升级没有自动更新。下载更高版本安装器并再次运行即可。
 
-从开始菜单启动 **Extract & Delete**，应用首先显示 Windows 原生文件选择器：
+- 已安装更低版本时，安装器先写入新 `app-4.1.0.0`，验证 SHA-256 后再切换 package 注册。
+- 当前仓库注册的 4.0 开发版会自动迁移；仓库目录、源代码和构建输出不会删除。
+- 再次运行同一版本会进入修复流程，不会产生第二个 package 或第二个完整卸载入口。
+- 高于安装器版本的 package 不会被降级。
+- 新 package 注册失败时，安装器会尽力恢复旧清单，并在 `%LOCALAPPDATA%\Temp\ExtractAndDelete-Setup-*.log` 中记录 HRESULT 和诊断。
 
-- 过滤 `.zip`、`.7z`、`.rar`、`.tar`。
-- 只允许选择一个文件。
-- 取消选择会退出应用。
+安装器执行 package 注册或回滚时暂时不能取消。若 GUI 正在解压，安装器会等待用户先正常结束任务，不会强制结束进程。
 
-### 4.2 Explorer 右键启动
+## 4. 解压和回收
 
-在 Explorer 中选中恰好一个支持格式，打开 Windows 11 现代右键菜单，点击 **解压并回收**。Shell Extension 只传递完整 Unicode 路径并激活 GUI，不直接解压、回收或写文件。多选时命令禁用。
+### 从开始菜单启动
 
-### 4.3 原生向导
+启动 `Extract & Delete` 后先出现 Windows 原生文件选择器。它只显示 `.zip`、`.7z`、`.rar`、`.tar`，只允许选择一个文件；取消选择会直接退出应用。
 
-窗口包含：
+### 从 Explorer 启动
+
+在 Explorer 中选中一个支持格式，打开 Windows 11 现代右键菜单并点击 **解压并回收**。多选时命令不可用。Shell Extension 只传递完整 Unicode 路径并激活 GUI，不直接读取压缩包或写文件。
+
+### 向导
+
+窗口按 Windows 11 中文“提取压缩(Zipped)文件夹”向导布局工作：
 
 ```text
 提取压缩(Zipped)文件夹
@@ -95,74 +102,72 @@ V4 是 Windows 11 x64 Developer Mode packaged 应用，版本 `4.0.0.0`。可见
                              [提取并回收(E)] [取消]
 ```
 
-普通主题下窗口使用参考图的浅色系统外观；高对比度模式服从系统颜色。窗口固定大小，不支持最大化和自由缩放。文本、边框和按钮由 Win32 Common Controls/GDI 绘制，不使用缩放后的截图或位图文字。
+目标框是唯一的准确目标路径：
 
-默认目标路径只去掉压缩包最后一个扩展名：
-
-```text
-D:\下载\演示 archive.7z
-→ D:\下载\演示 archive
-```
-
-路径框是唯一的准确目标路径：
-
-- 可以直接编辑。
-- 可以输入不存在的绝对本地路径或有效 UNC 路径。
-- 点击 **浏览(R)...** 后，所选目录直接替换文本框内容。
-- 不会再次追加压缩包名称。
-- 目标可以是已有目录；Windows Shell 负责合并和冲突提示。
+- 默认只去掉压缩包最后一个扩展名，例如 `D:\下载\演示.7z` → `D:\下载\演示`。
+- 可以直接编辑绝对本地路径或有效 UNC 路径。
+- “浏览”选择的目录直接替换文本框，不追加压缩包名称。
+- 目标可以不存在，也可以是已有目录；Windows Shell 负责创建、合并、冲突提示、错误和按需 UAC。
 - 目标如果是文件，执行按钮会被禁用。
 
-快捷键：
+快捷键：`Alt+F` 聚焦路径，`Alt+R` 浏览，`Alt+H` 切换复选框，`Alt+E` 执行，`Enter` 执行，`Esc` 取消或关闭。
+
+### 处理阶段
 
 ```text
-Alt+F  聚焦并选择目标路径
-Alt+R  浏览目标文件夹
-Alt+H  切换“完成时显示提取的文件”
-Alt+E  执行“提取并回收”
-Enter  执行
-Esc    取消或关闭
+7-Zip 扫描与安全校验
+→ 受控 staging 解压
+→ Windows Shell 创建/合并目标并处理冲突
+→ 再次确认源文件身份
+→ 将源压缩包移入回收站
 ```
 
-### 4.4 执行、取消和冲突
+扫描和 staging 阶段可取消；Windows Shell 发布阶段显示原生复制、冲突、错误和 UAC 界面；回收阶段不可取消。
 
-点击 **提取并回收(E)** 后，路径、浏览按钮和复选框锁定。
+## 5. 源文件和目标行为
 
-- 扫描/staging 阶段使用 Windows 原生进度框，可以取消。
-- Publishing 阶段使用 Windows Shell 原生进度、冲突、错误和 UAC 界面。
-- 回收阶段不可取消。
-- 发布取消或失败后，已写入的部分目标内容可能保留。
-- 应用不会自动删除或回滚 Windows 已经写入的目标内容。
+- 完整解压且没有跳过条目后，源压缩包才会移入回收站。
+- “替换”或“保留两者”并完成全部条目，视为完整发布，可以回收源包。
+- 任意条目选择“跳过”时，目标保留已完成内容，但源包保留。
+- 发布取消、发布失败或 UAC 被拒绝时，Windows 已写入的部分目标可能保留；应用不回滚这些内容，源包保留。
+- 扫描/staging 失败或取消时，不发布目标，staging 尽力清理，源包保留。
+- 回收失败时目标和源包都保留；绝不永久删除或自动提权。
+- 源文件在开始、发布前或回收前改变时，不执行回收。
+- 成功后若勾选“完成时显示提取的文件”，应用尝试打开目标目录并随后自动关闭；打开失败只显示非破坏性警告。
 
-冲突时可以使用 Windows 提供的替换、跳过、保留两者和应用到全部选项。只有没有跳过并且所有项目完成，源压缩包才会进入回收站。
+支持 ZIP、7Z、RAR、TAR。密码包、加密包、分卷包、`.tar.gz` 等复合扩展名、批量任务、Windows 10 和 ARM64 不在本版本范围内。
 
-### 4.5 完成结果
+## 6. 卸载
 
-- 完整成功：源包移入回收站；若复选框勾选则打开目标目录，然后窗口自动关闭。
-- 回收失败：目标已完整发布，源包保留，窗口显示黄色警告。
-- 跳过项目：目标保留部分结果，源包保留，窗口保留。
-- 发布取消/失败：目标可能部分存在，源包保留，窗口保留。
-- staging 解压失败/取消：目标不改变，源包保留。
-- 打开目录失败：核心任务仍算完成，但窗口显示非破坏性警告。
+Windows 可能显示两个入口：
 
-运行中再次从 Explorer 激活时，只前置当前窗口并提示已有任务，不替换路径、不排队、不并行。关闭窗口在可取消阶段会确认取消；发布或回收阶段会阻止关闭。
+```text
+Extract & Delete（完整卸载）
+Extract & Delete（系统集成组件）
+```
 
-## 5. 常见问题
+优先使用 **Extract & Delete（完整卸载）**：它先精确注销 package，再删除安装器管理的 payload、脚本、许可证和卸载项。若 Shell DLL 被占用，会停止并要求关闭应用或注销登录后重试；它不会强制终止 Explorer，不会删除用户压缩包、解压目录或安装目录外文件。
 
-### Developer Mode 未开启
+只移除“系统集成组件”会让开始菜单和 Explorer 菜单消失，但安装文件仍保留；重新运行同版本安装器即可修复注册。
 
-打开“设置 → 系统 → 面向开发人员 → 开发人员模式”，再运行部署脚本。脚本不会自动修改注册表。
+完整卸载后重启 Explorer 或重新登录，以刷新右键菜单缓存。
 
-### 右键菜单没有出现
+## 7. 常见问题
 
-依次确认 `deploy-dev.ps1` 和 `verify-dev-install.ps1` 都成功，然后重启 Explorer。`acceptance-check.ps1` 成功只表示构建输出正确，不表示 package 已注册。
+### 没有右键菜单
 
-### 源压缩包为什么还在
+确认 Developer Mode 已开启，检查 package 的 `Status=Ok` 和 `Version=4.1.0.0`，然后重启 Explorer。重新运行安装器可执行修复。
 
-只要出现跳过、取消、发布失败、staging 清理失败、源身份变化或回收失败，源包都会保留。成功后的删除动作是移入回收站，不是永久删除。
+### 安装器显示未知发布者
 
-### CLI 在哪里
+这是 Developer Preview 的预期现象。安装器、卸载器和应用没有生产 Authenticode 签名；SHA-256 和 GitHub 构建证明只能证明文件来源和完整性，不能替代 Windows 受信任签名。
 
-CLI 源码仍保留在 `src/ExtractAndDelete.Cli` 作为历史参考，但 V4 已冻结，不进入默认 solution、构建、测试、发布和使用文档。
+### 源压缩包还在
 
-相关文档：[项目总设计](PROJECT_DESIGN.md)、[V4 验收说明](ACCEPTANCE.md)、[第三方声明](../THIRD-PARTY-NOTICES.md)。
+只要跳过、取消、发布失败、源身份改变或回收失败，源包就会保留。成功后的动作是移入回收站，而不是永久删除。
+
+### 需要日志
+
+安装预检、迁移、注册和回滚日志位于 `%LOCALAPPDATA%\Temp\ExtractAndDelete-Setup-*.log`。把对应日志中的 HRESULT 和最后一条失败消息用于排查；不要删除或修改用户解压数据来“修复”安装。
+
+开发者构建、测试和发布流程见：[项目总设计](PROJECT_DESIGN.md)、[V4.1 验收说明](ACCEPTANCE.md)、[4.1.0 Release Notes](releases/v4.1.0.md)、[第三方声明](../THIRD-PARTY-NOTICES.md)。CLI 源码仍保留作历史参考，但已冻结，不属于用户交付。
