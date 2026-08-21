@@ -39,7 +39,7 @@ if ([string]$package.Status -ne 'Ok') {
 
 $installLocationText = [string]$package.InstallLocation
 if ([string]::IsNullOrWhiteSpace($installLocationText)) {
-    Fail 'package InstallLocation 为空，当前注册是损坏或残留状态。请运行 4.1.1 安装器修复。'
+    Fail "package InstallLocation 为空，当前注册是损坏或残留状态。请运行 $($releaseConfig.semanticVersion) 安装器修复。"
 }
 $registeredPath = [IO.Path]::GetFullPath($installLocationText).TrimEnd('\')
 $guiOutput = $registeredPath
@@ -78,7 +78,7 @@ if ($identity.Publisher -ne 'CN=ExtractAndDelete Developer') {
     Fail "清单 Publisher 不匹配：$($identity.Publisher)。"
 }
 if ($identity.Version -ne $expectedPackageVersion) {
-    Fail "清单 Version 不匹配，预期 V4.1.1 $expectedPackageVersion：$($identity.Version)。"
+    Fail "清单 Version 不匹配，预期 $expectedPackageVersion：$($identity.Version)。"
 }
 $application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
 if ($null -eq $application -or $application.Id -ne 'App') {

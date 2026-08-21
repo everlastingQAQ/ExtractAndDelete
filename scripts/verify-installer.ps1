@@ -14,8 +14,20 @@ if ($Version -ne [string]$config.semanticVersion) { throw "版本参数不匹配
 $releaseRoot = Join-Path $repoRoot "artifacts\release\$Version"
 $installerPath = Join-Path $releaseRoot "ExtractAndDelete-Setup-$Version-x64.exe"
 $hashPath = "$installerPath.sha256"
+$issPath = Join-Path $repoRoot 'installer\ExtractAndDelete.iss'
 foreach ($path in @($installerPath, $hashPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "安装器发布文件不存在：$path" }
+}
+if (-not (Test-Path -LiteralPath $issPath -PathType Leaf)) { throw "Inno 安装器脚本不存在：$issPath" }
+$issText = Get-Content -LiteralPath $issPath -Raw
+if ($issText -notmatch '(?m)^AppName=Extract & Delete\s*$') {
+    throw 'Inno 安装过程产品名必须是 Extract & Delete。'
+}
+if ($issText -notmatch '(?m)^UninstallDisplayName=Extract & Delete（完整卸载）\s*$') {
+    throw 'Inno 卸载入口名称必须是 Extract & Delete（完整卸载）。'
+}
+if ($issText -match '(?m)^AppName=Extract & Delete（完整卸载）') {
+    throw 'Inno AppName 不能使用完整卸载名称。'
 }
 
 $hashLine = (Get-Content -LiteralPath $hashPath | Select-Object -First 1).Trim()

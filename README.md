@@ -2,7 +2,7 @@
 
 面向 Windows 11 x64 的安全压缩包工具：完整提取后，将源压缩包移入 Windows 回收站。
 
-当前版本为 `4.1.1` Developer Preview。产品使用 WinForms/Win32 原生控件复刻 Windows 11“提取压缩(Zipped)文件夹”窗口，内置官方 7-Zip 26.02 x64，并通过 Windows 11 Explorer 现代右键菜单提供“解压并回收”。4.1.1 修复了 4.1.0 loose-file package 清单导致的启动和 RPC 错误。
+当前版本为 `4.1.2` Developer Preview。产品使用 WinForms/Win32 原生控件复刻 Windows 11“提取压缩(Zipped)文件夹”窗口，内置官方 7-Zip 26.02 x64，并通过 Windows 11 Explorer 现代右键菜单提供“解压并回收”。4.1.2 在保留自包含运行时的前提下仅打包简体中文资源，并修正安装向导产品名显示。
 
 ## 重要限制
 
@@ -20,7 +20,7 @@
 
 <https://github.com/everlastingQAQ/ExtractAndDelete/releases>
 
-下载与版本匹配的 `ExtractAndDelete-Setup-4.1.1-x64.exe`，可选按同名 `.sha256` 文件核对完整性，然后双击安装。安装器会把 payload 写入当前用户的：
+下载与版本匹配的 `ExtractAndDelete-Setup-4.1.2-x64.exe`，可选按同名 `.sha256` 文件核对完整性，然后双击安装。安装器会把 payload 写入当前用户的：
 
 ```text
 %LOCALAPPDATA%\Programs\ExtractAndDelete
@@ -32,6 +32,8 @@ Windows 可能显示两个卸载入口：
 
 - `Extract & Delete（完整卸载）`：推荐使用，会注销 package 并删除安装器管理的文件。
 - `Extract & Delete（系统集成组件）`：只移除 package 注册和右键菜单，文件仍保留。
+
+4.1.2 仍是自包含发布，不需要另装 .NET、Windows App SDK 或 7-Zip；为减小安装包，只随包提供 `zh-CN` 卫星资源，不改变运行时和功能。
 
 ## 安全承诺
 
@@ -93,6 +95,7 @@ dotnet test .\ExtractAndDelete.slnx `
 - [项目总设计](docs/PROJECT_DESIGN.md)
 - [验收说明](docs/ACCEPTANCE.md)
 - [4.1.1 Developer Preview 发布说明](docs/releases/v4.1.1.md)
+- [4.1.2 Developer Preview 发布说明](docs/releases/v4.1.2.md)
 - [4.1.0 历史发布说明](docs/releases/v4.1.0.md)
 - [第三方声明](THIRD-PARTY-NOTICES.md)
 - [MIT License](LICENSE)

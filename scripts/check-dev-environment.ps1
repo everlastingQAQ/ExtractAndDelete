@@ -5,13 +5,15 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'release-config.json') -Raw | ConvertFrom-Json
+$semanticVersion = [string]$releaseConfig.semanticVersion
 
 function Fail([string]$message) {
     throw "开发部署环境检查失败：$message"
 }
 
 if (-not [Environment]::Is64BitOperatingSystem) {
-    Fail '当前系统不是 x64。Extract & Delete 4.1.1 Developer Preview 只支持 Windows 11 x64。'
+    Fail "当前系统不是 x64。Extract & Delete $semanticVersion Developer Preview 只支持 Windows 11 x64。"
 }
 
 $os = Get-CimInstance -ClassName Win32_OperatingSystem

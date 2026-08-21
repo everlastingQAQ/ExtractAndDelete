@@ -7,7 +7,7 @@ param(
     [string]$ManifestPath,
     [string]$InstallRoot,
     [string]$PayloadPath,
-    [string]$ExpectedVersion = '4.1.1.0',
+    [string]$ExpectedVersion = '4.1.2.0',
     [string]$ExpectedPackageName = 'ExtractAndDelete',
     [string]$ExpectedPublisher = 'CN=ExtractAndDelete Developer',
     [string]$ExpectedFamilyName = 'ExtractAndDelete_vyz6krqqgd78c',

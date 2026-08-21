@@ -1,12 +1,12 @@
 # Extract & Delete 项目总设计文档
 
-## 1. V4.1.1 基线
+## 1. V4.1.2 基线
 
-V4.1.1 Developer Preview 版本为 `4.1.1` / package `4.1.1.0`，只支持 Windows 11 x64 和 Developer Mode。应用继续使用 .NET 10、Windows App SDK 2.3.1、single-project MSIX、自包含 x64 输出、固定 package identity 和 Explorer 现代右键菜单。公开交付由 Inno Setup 6.7.3 封装为一个当前用户 EXE 安装器；安装器、卸载器和应用均未使用生产 Authenticode 签名。
+V4.1.2 Developer Preview 版本为 `4.1.2` / package `4.1.2.0`，只支持 Windows 11 x64 和 Developer Mode。应用继续使用 .NET 10、Windows App SDK 2.3.1、single-project MSIX、自包含 x64 输出、固定 package identity 和 Explorer 现代右键菜单。公开交付由 Inno Setup 6.7.3 封装为一个当前用户 EXE 安装器；安装器、卸载器和应用均未使用生产 Authenticode 签名。
 
 可见窗口已经从 WinUI XAML 迁移为 C# WinForms/Win32 Common Controls。Windows App SDK 只保留 packaged 构建、自包含 runtime 和 AppInstance 单实例能力，不参与可见窗口渲染。
 
-内置官方 7-Zip 26.02 x64（`7z.exe`、`7z.dll`）负责扫描和安全 staging 解压，支持 ZIP、7Z、RAR、TAR。CLI 源码仍保留在 `src/ExtractAndDelete.Cli`，但 V4.1.1 已冻结，不进入默认 solution、测试、发布、安装器或用户交付。
+内置官方 7-Zip 26.02 x64（`7z.exe`、`7z.dll`）负责扫描和安全 staging 解压，支持 ZIP、7Z、RAR、TAR。4.1.2 只打包 `zh-CN` 卫星资源以减少体积，不启用 trimming，不移除自包含运行时。CLI 源码仍保留在 `src/ExtractAndDelete.Cli`，但已冻结，不进入默认 solution、测试、发布、安装器或用户交付。
 
 ## 2. 产品不变量
 
@@ -121,7 +121,7 @@ Explorer 清单继续注册 `.zip`、`.7z`、`.rar`、`.tar`，单选启用、�
 ```text
 Name      ExtractAndDelete
 Publisher CN=ExtractAndDelete Developer
-Version   4.1.1.0
+Version   4.1.2.0
 App ID    App
 CLSID     4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 ```
@@ -131,19 +131,19 @@ CLSID     4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 发布配置集中在 `release-config.json`，固定以下值：
 
 ```text
-semanticVersion   4.1.1
-packageVersion    4.1.1.0
-git tag            v4.1.1
+semanticVersion   4.1.2
+packageVersion    4.1.2.0
+git tag            v4.1.2
 Inno Setup         6.7.3
 Installer AppId   {E8A892FB-7B98-4400-B316-083DEF0CEA12}
 Install root       %LOCALAPPDATA%\Programs\ExtractAndDelete
-Payload            app-4.1.1.0
+Payload            app-4.1.2.0
 Package Family     ExtractAndDelete_vyz6krqqgd78c
 AUMID              ExtractAndDelete_vyz6krqqgd78c!App
 Shell CLSID        4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 ```
 
-`installer\ExtractAndDelete.iss` 以 Inno modern wizard 生成 `ExtractAndDelete-Setup-4.1.1-x64.exe`。安装范围固定为当前用户（`PrivilegesRequired=lowest`），只允许 x64compatible Windows 11，不创建桌面快捷方式，不关闭进程，不导入证书。安装器页面使用仓库内的简体中文 Inno messages，并明确显示 Developer Mode、未签名 SmartScreen、固定路径和两个卸载入口。
+`installer\ExtractAndDelete.iss` 以 Inno modern wizard 生成 `ExtractAndDelete-Setup-4.1.2-x64.exe`。安装范围固定为当前用户（`PrivilegesRequired=lowest`），只允许 x64compatible Windows 11，不创建桌面快捷方式，不关闭进程，不导入证书。安装过程中产品名显示为 `Extract & Delete`；系统卸载入口保留为 `Extract & Delete（完整卸载）`。安装器页面使用仓库内的简体中文 Inno messages，并明确显示 Developer Mode、未签名 SmartScreen、固定路径和两个卸载入口。
 
 `scripts\package-lifecycle.ps1` 是安装器和卸载器唯一的 package 生命周期边界：
 

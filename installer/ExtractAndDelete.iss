@@ -1,8 +1,8 @@
-#define DefaultReleaseVersion "4.1.1"
-#define DefaultPackageVersion "4.1.1.0"
+#define DefaultReleaseVersion "4.1.2"
+#define DefaultPackageVersion "4.1.2.0"
 #define DefaultPayloadSizeBytes "0"
-#define DefaultPayloadDir "..\\artifacts\\release\\4.1.1\\payload"
-#define DefaultOutputDir "..\\artifacts\\release\\4.1.1"
+#define DefaultPayloadDir "..\\artifacts\\release\\4.1.2\\payload"
+#define DefaultOutputDir "..\\artifacts\\release\\4.1.2"
 
 #ifndef ReleaseVersion
   #define ReleaseVersion DefaultReleaseVersion
@@ -22,9 +22,10 @@
 
 [Setup]
 AppId={{E8A892FB-7B98-4400-B316-083DEF0CEA12}
-AppName=Extract & Delete（完整卸载）
+AppName=Extract & Delete
 AppVersion={#ReleaseVersion}
-AppVerName=Extract & Delete（完整卸载） {#ReleaseVersion}
+AppVerName=Extract & Delete {#ReleaseVersion}
+UninstallDisplayName=Extract & Delete（完整卸载）
 AppPublisher=everlasting
 AppPublisherURL=https://github.com/everlastingQAQ/ExtractAndDelete
 AppSupportURL=https://github.com/everlastingQAQ/ExtractAndDelete

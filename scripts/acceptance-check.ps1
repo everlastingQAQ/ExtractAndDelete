@@ -54,6 +54,9 @@ if ($null -eq $propertyGroup) { throw 'GUI project is not configured to use WinF
 if ($propertyGroup.ApplicationHighDpiMode -ne 'PerMonitorV2') {
     throw 'GUI project must opt into PerMonitorV2 before creating any window.'
 }
+if ($propertyGroup.SatelliteResourceLanguages -ne 'zh-CN') {
+    throw 'GUI project must package only the zh-CN satellite resources for the lightweight release.'
+}
 
 $cliArtifacts = @(Get-ChildItem -LiteralPath $guiOutput -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -like 'ExtractAndDelete.Cli*' })
@@ -71,7 +74,7 @@ $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/w
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
 if ($null -eq $identity -or $identity.Name -ne 'ExtractAndDelete') { throw 'Package identity is not ExtractAndDelete.' }
-if ($identity.Version -ne $expectedPackageVersion) { throw "Package version is not V4.1.1 $($expectedPackageVersion): $($identity.Version)" }
+if ($identity.Version -ne $expectedPackageVersion) { throw "Package version is not ${expectedPackageVersion}: $($identity.Version)" }
 $application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
 if ($null -eq $application) { throw 'The package Application node is missing.' }
 if ($identity.ProcessorArchitecture -ne 'x64') { throw "Package architecture is not x64: $($identity.ProcessorArchitecture)" }
@@ -111,7 +114,7 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V4.1.1 Developer Preview output layout checks passed.'
+Write-Host "V$($releaseConfig.semanticVersion) Developer Preview output layout checks passed."
 Write-Host 'Package registration was not checked.'
 Write-Host "For a repository registration, run scripts\verify-dev-install.ps1 -ExpectedInstallLocation `"$guiOutput`"."
 Write-Host "Package identity: $($identity.Name)"

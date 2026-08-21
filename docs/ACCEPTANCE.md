@@ -1,6 +1,6 @@
-# Extract & Delete 4.1.1 Developer Preview 验收说明
+# Extract & Delete 4.1.2 Developer Preview 验收说明
 
-本版本是 `4.1.1` / package `4.1.1.0` 的 Windows 11 x64 Developer Preview。交付资产只有一个未签名的 Inno Setup EXE 和同名 SHA-256 文件。它需要 Developer Mode，不提供 Store、MSIX、MSI、AppInstaller、便携版或自动更新。
+本版本是 `4.1.2` / package `4.1.2.0` 的 Windows 11 x64 Developer Preview。交付资产只有一个未签名的 Inno Setup EXE 和同名 SHA-256 文件。它需要 Developer Mode，不提供 Store、MSIX、MSI、AppInstaller、便携版或自动更新。4.1.2 保留自包含运行时，仅打包 `zh-CN` 卫星资源。
 
 ## 1. 发布前自动检查
 
@@ -31,9 +31,9 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release --filter "Category=W
 输出固定为：
 
 ```text
-artifacts\release\4.1.1\
-├─ ExtractAndDelete-Setup-4.1.1-x64.exe
-└─ ExtractAndDelete-Setup-4.1.1-x64.exe.sha256
+artifacts\release\4.1.2\
+├─ ExtractAndDelete-Setup-4.1.2-x64.exe
+└─ ExtractAndDelete-Setup-4.1.2-x64.exe.sha256
 ```
 
 ## 2. 安装器静态契约
@@ -46,7 +46,7 @@ AppId       {E8A892FB-7B98-4400-B316-083DEF0CEA12}
 架构         x64compatible
 最低系统     Windows 11 build 22000
 安装根目录   %LOCALAPPDATA%\Programs\ExtractAndDelete
-payload      app-4.1.1.0
+payload      app-4.1.2.0
 ```
 
 安装器不创建桌面快捷方式，不自动关闭应用或 Explorer，不生成签名文件。完成页默认勾选运行应用；启动通过 AUMID `ExtractAndDelete_vyz6krqqgd78c!App`，不直接执行安装目录 EXE。
@@ -71,7 +71,7 @@ payload      app-4.1.1.0
 安装器本机验收用真实 EXE：
 
 ```powershell
-Start-Process .\artifacts\release\4.1.1\ExtractAndDelete-Setup-4.1.1-x64.exe -Wait
+Start-Process .\artifacts\release\4.1.2\ExtractAndDelete-Setup-4.1.2-x64.exe -Wait
 .\scripts\verify-dev-install.ps1
 ```
 
@@ -79,12 +79,12 @@ Start-Process .\artifacts\release\4.1.1\ExtractAndDelete-Setup-4.1.1-x64.exe -Wa
 
 ```text
 Name            ExtractAndDelete
-Version         4.1.1.0
+Version         4.1.2.0
 Status          Ok
 PackageFamily   ExtractAndDelete_vyz6krqqgd78c
 Application Id  App
 Publisher       CN=ExtractAndDelete Developer
-InstallLocation ...\Programs\ExtractAndDelete\app-4.1.1.0
+InstallLocation ...\Programs\ExtractAndDelete\app-4.1.2.0
 ```
 
 清单必须保留固定 Shell CLSID `4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E`，并针对 `.zip`、`.7z`、`.rar`、`.tar` 注册 verb。
@@ -93,10 +93,10 @@ InstallLocation ...\Programs\ExtractAndDelete\app-4.1.1.0
 
 在干净测试用户或可恢复 VM 中准备以下场景：
 
-1. 已有仓库注册的 `4.0.0.0`：运行 4.1.1 EXE，确认新 package 注册成功，旧仓库目录和源码完全不变。
-2. 已有损坏的 4.1.0 package（InstallLocation 为空或清单含占位符）：运行 4.1.1 EXE，确认只修复固定 package，不删除其他目录。
-3. 已有同版本 4.1.1：再次运行 EXE，确认进入修复，不产生第二个 package 或第二个完整卸载项。
-4. 已有高于 4.1.1 的 package：确认安装器在任何 package 变更前拒绝降级。
+1. 已有仓库注册的 `4.0.0.0`：运行 4.1.2 EXE，确认新 package 注册成功，旧仓库目录和源码完全不变。
+2. 已有损坏的 4.1.0/4.1.1 package（InstallLocation 为空或清单含占位符）：运行 4.1.2 EXE，确认只修复固定 package，不删除其他目录。
+3. 已有同版本 4.1.2：再次运行 EXE，确认进入修复，不产生第二个 package 或第二个完整卸载项。
+4. 已有高于 4.1.2 的 package：确认安装器在任何 package 变更前拒绝降级。
 4. 让新清单注册失败：确认新注册被精确清理，旧清单恢复；失败对话框和 `%LOCALAPPDATA%\Temp\ExtractAndDelete-Setup-*.log` 同时包含新错误和恢复错误（如有）。
 5. Developer Mode 关闭：确认安装器不写文件、不改变 package，能打开 `ms-settings:developers`，开启后可重新检测。
 6. GUI 正在运行：确认安装器不强制结束进程，提供重试/取消并等待任务正常结束。
@@ -171,9 +171,9 @@ package 注销失败时不得删除文件，不得强制结束 Explorer 或 `dll
 
 ## 7. GitHub 发布验收
 
-发布工作流只接受与配置一致的版本 tag；本轮为 `v4.1.1`。它验证 tag commit 属于 `origin/main`、版本配置一致、测试通过、Inno 6.7.3 和构建证明可用。公开 Release 必须：
+发布工作流只接受与配置一致的版本 tag；本轮为 `v4.1.2`。它验证 tag commit 属于 `origin/main`、版本配置一致、测试通过、Inno 6.7.3 和构建证明可用。公开 Release 必须：
 
-- 标题为 `Extract & Delete 4.1.1 Developer Preview`。
+- 标题为 `Extract & Delete 4.1.2 Developer Preview`。
 - 不是 Draft，不使用 GitHub prerelease 标记。
 - 只包含 EXE 和 `.sha256` 两项资产。
 - 首屏说明 Windows 11 x64、Developer Mode、未签名/SmartScreen、当前用户安装、无自动更新、完整卸载入口、四种格式和回收站行为。
@@ -181,12 +181,12 @@ package 注销失败时不得删除文件，不得强制结束 Explorer 或 `dll
 发布后下载真实资产验证：
 
 ```powershell
-gh release view v4.1.1
-gh release download v4.1.1
-Get-FileHash .\ExtractAndDelete-Setup-4.1.1-x64.exe -Algorithm SHA256
-gh attestation verify .\ExtractAndDelete-Setup-4.1.1-x64.exe --repo everlastingQAQ/ExtractAndDelete
+gh release view v4.1.2
+gh release download v4.1.2
+Get-FileHash .\ExtractAndDelete-Setup-4.1.2-x64.exe -Algorithm SHA256
+gh attestation verify .\ExtractAndDelete-Setup-4.1.2-x64.exe --repo everlastingQAQ/ExtractAndDelete
 ```
 
 再用下载后的 EXE 在干净 Windows 11 x64 VM 完成一次安装、菜单、真实解压、回收和完整卸载验收。
 
-CLI 源码保留在 `src\ExtractAndDelete.Cli` 作为冻结历史，不进入 V4.1.1 安装器、默认构建、测试、发布或使用文档。
+CLI 源码保留在 `src\ExtractAndDelete.Cli` 作为冻结历史，不进入 V4.1.2 安装器、默认构建、测试、发布或使用文档。

@@ -4,11 +4,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
-    <VersionPrefix>4.1.1</VersionPrefix>
-    <Version>4.1.1</Version>
-    <AssemblyVersion>4.1.1.0</AssemblyVersion>
-    <FileVersion>4.1.1.0</FileVersion>
-    <InformationalVersion>4.1.1 Developer Preview</InformationalVersion>
+    <VersionPrefix>4.1.2</VersionPrefix>
+    <Version>4.1.2</Version>
+    <AssemblyVersion>4.1.2.0</AssemblyVersion>
+    <FileVersion>4.1.2.0</FileVersion>
+    <InformationalVersion>4.1.2 Developer Preview</InformationalVersion>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
