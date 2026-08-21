@@ -1,0 +1,104 @@
+name: Publish Windows Developer Preview
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-publish:
+    runs-on: windows-2025
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag belongs to main
+        shell: pwsh
+        run: |
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release tag commit is not contained in origin/main.'
+          }
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $config = Get-Content -LiteralPath .\release-config.json -Raw | ConvertFrom-Json
+          $expectedTag = "v$($config.semanticVersion)"
+          if ($env:RELEASE_TAG -ne $expectedTag) {
+            throw "Tag $env:RELEASE_TAG does not match $expectedTag."
+          }
+
+      - name: Verify release build and ordinary tests
+        shell: pwsh
+        run: .\scripts\verify.ps1
+
+      - name: Download and verify Inno Setup 6.7.3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $toolRoot = Join-Path $env:RUNNER_TEMP 'inno-6.7.3'
+          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+          gh release download is-6_7_3 --repo jrsoftware/issrc --pattern innosetup-6.7.3.exe --dir $toolRoot
+          gh release verify-asset is-6_7_3 (Join-Path $toolRoot 'innosetup-6.7.3.exe') --repo jrsoftware/issrc
+          $installer = Join-Path $toolRoot 'innosetup-6.7.3.exe'
+          $installRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-6.7.3'
+          $process = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installRoot") -Wait -NoNewWindow -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup bootstrap installation failed: $($process.ExitCode)" }
+          $iscc = Join-Path $installRoot 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw "ISCC.exe not found: $iscc" }
+          "ISCC_PATH=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build the single EXE installer
+        shell: pwsh
+        run: .\scripts\build-installer.ps1 -IsccPath $env:ISCC_PATH
+
+      - name: Verify installer artifact
+        shell: pwsh
+        run: .\scripts\verify-installer.ps1
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe
+
+      - name: Create public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          $release = gh release create $tag `
+            artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe `
+            artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe.sha256 `
+            --draft `
+            --title 'Extract & Delete 4.1.0 Developer Preview' `
+            --notes-file docs/releases/v4.1.0.md
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release draft creation failed.' }
+          gh release edit $tag --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
+
+      - name: Verify published release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:RELEASE_TAG
+          gh release download $env:RELEASE_TAG --dir (Join-Path $env:RUNNER_TEMP 'published-release') --pattern 'ExtractAndDelete-Setup-4.1.0-x64.exe*'
