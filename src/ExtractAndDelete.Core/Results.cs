@@ -13,6 +13,7 @@ public enum WorkflowStage
 public enum WorkflowOutcome
 {
     Completed,
+    CompletedWithSkippedItems,
     Cancelled,
     ValidationFailed,
     ExtractionFailed,
@@ -52,7 +53,27 @@ public enum ErrorCode
     ArchiveEngineProcessFailure,
     ArchiveEngineTerminationFailure,
     ArchiveVerificationFailure,
-    InsufficientMemory
+    InsufficientMemory,
+    DestinationItemsSkipped,
+    DestinationCreationFailed,
+    DestinationPublishAborted,
+    SourceDestinationConflict
+}
+
+public enum DestinationPublishOutcome
+{
+    Completed,
+    CompletedWithSkippedItems,
+    Cancelled,
+    Failed
+}
+
+public enum DestinationState
+{
+    Unchanged,
+    PartiallyModified,
+    CompletedWithSkippedItems,
+    Completed
 }
 
 public enum SourceDisposition
@@ -111,18 +132,38 @@ public sealed record CleanupResult(
     public string? ErrorMessage => Success ? null : UserMessage;
 }
 
+public sealed record DestinationPublishResult(
+    DestinationPublishOutcome Outcome,
+    ErrorCode ErrorCode,
+    string UserMessage,
+    DestinationState DestinationState,
+    int SucceededItemCount,
+    int SkippedItemCount,
+    int FailedItemCount,
+    string? DiagnosticMessage = null)
+{
+    public bool IsComplete => Outcome == DestinationPublishOutcome.Completed
+        && DestinationState == DestinationState.Completed
+        && SkippedItemCount == 0
+        && FailedItemCount == 0;
+}
+
 public sealed record ExtractAndDeleteResult(
     WorkflowOutcome Outcome,
     ErrorCode ErrorCode,
     string UserMessage,
     string ArchivePath,
     string DestinationPath,
-    bool DestinationPublished,
+    DestinationState DestinationState,
     SourceDisposition SourceDisposition,
     string? DiagnosticMessage = null,
     string? StagingPath = null)
 {
-    public bool Success => Outcome == WorkflowOutcome.Completed;
+    public bool DestinationPublished => DestinationState == DestinationState.Completed;
+
+    public bool Success => Outcome == WorkflowOutcome.Completed
+        && DestinationPublished
+        && SourceDisposition == SourceDisposition.Recycled;
 
     public string? ErrorMessage => Success ? null : UserMessage;
 }
