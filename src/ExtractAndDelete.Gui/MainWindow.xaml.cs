@@ -10,6 +10,7 @@ using System.Diagnostics;
 using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 
 namespace ExtractAndDelete.Gui;
@@ -139,6 +140,20 @@ public sealed partial class MainWindow : Window
 
         _allowClose = true;
         Close();
+    }
+
+    private void RootGrid_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter && ViewModel.CanExecute)
+        {
+            ExecuteButton_Click(ExecuteButton, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Escape)
+        {
+            CancelButton_Click(CancelButton, new RoutedEventArgs());
+            e.Handled = true;
+        }
     }
 
     private async Task<StorageFile?> PickArchiveAsync()
