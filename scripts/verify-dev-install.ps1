@@ -57,7 +57,7 @@ if ($identity.Name -ne 'ExtractAndDelete') {
 if ($identity.Publisher -ne 'CN=ExtractAndDelete Developer') {
     Fail "清单 Publisher 不匹配：$($identity.Publisher)。"
 }
-if ($identity.Version -ne '2.0.0.0') {
+if ($identity.Version -ne '3.0.0.0') {
     Fail "清单 Version 不匹配：$($identity.Version)。"
 }
 
@@ -88,6 +88,8 @@ $requiredFiles = @(
     'Microsoft.WindowsAppRuntime.dll',
     'ThirdParty\7-Zip\7z.exe',
     'ThirdParty\7-Zip\7z.dll',
+    'ThirdParty\7-Zip\licenses\License.txt',
+    'THIRD-PARTY-NOTICES.md',
     'Assets\StoreLogo.png',
     'Assets\Square44x44Logo.png',
     'Assets\Square71x71Logo.png',

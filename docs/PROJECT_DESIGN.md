@@ -2,104 +2,40 @@
 
 ## 1. 当前基线
 
-V0.5 已完成并已合入 `main`：
+当前实现是 V3 Developer RC，版本 `3.0.0.0`，只面向 Windows 11 x64。应用是 packaged WinUI 3 single-project app，使用 Windows App SDK 2.3.1、自包含 x64 输出、固定 package identity 和 Windows 11 Explorer 现代右键菜单。Developer Mode 是部署前置条件；项目不生成签名 MSIX、MSIXBundle、AppInstaller、MSI 或便携版。
 
-- ZIP 解压。
-- 源 ZIP 移入 Windows 回收站。
-- Core 工作流。
-- CLI 入口。
-- V0.5 Core 测试。
+内置官方 7-Zip 26.02 x64（`7z.exe`、`7z.dll`）负责扫描和安全 staging 解压，支持 ZIP、7Z、RAR、TAR。GUI 和 CLI 不搜索 PATH，不 P/Invoke 用户机器上的 7-Zip。
 
-V1 当前已落地：
+## 2. 产品不变量
 
-- Core 异步契约、稳定错误码、源文件身份校验和 staging 工作流。
-- 真正可取消的 ZIP 扫描/复制、同卷原子发布和回收失败保留语义。
-- `IFileOperation` 回收站实现和新的 CLI 退出码。
-- .NET 10 / WinUI 3 / Windows App SDK 2.3.1 单项目 packaged GUI，启用 .NET 与 Windows App SDK x64 自包含部署，使用模板 PNG 占位图标。
-- 简体中文 ViewModel、Explorer 激活参数解析、单实例状态入口和 Windows 原生文件夹选择器。
-- x64 `IExplorerCommand` C++ DLL 源码、package manifest 注册项和 Developer Mode 脚本。
+- 每次只处理一个压缩包；单实例、单任务，不排队并行任务。
+- GUI 只有一个可编辑的准确目标路径。默认值是压缩包所在目录加去掉最后一个扩展名后的文件名。
+- GUI 目标可以不存在，也可以是已有目录。Windows Shell 负责创建、合并和冲突交互。
+- CLI 第二个参数就是准确目标目录；目标必须不存在，使用原子目录发布，不显示冲突窗口。
+- 压缩引擎永远只写入受控 staging；失败或取消不会发布半成品（Windows 发布阶段本身可能留下已写入的部分目标）。
+- 只有完整发布、无跳过、staging 清理成功、源身份未改变且回收站操作成功，工作流才是 `Completed`。
+- 自动删除实际是 Windows 回收站操作；任何失败都保留源包，不永久删除、不自动提权。
+- 源文件身份在开始、发布前、回收前三次检查；丢失或被替换时不回收。
+- 不支持密码/加密、分卷、`.tar.gz` 等复合扩展名、批量、Windows 10 和 ARM64。
 
-V2 当前实现状态：
-
-- 已固定并随仓库分发官方 7-Zip 26.02 x64 `7z.exe` 和 `7z.dll`。
-- 已添加第三方许可证、来源说明、SHA-256 清单和构建前完整性检查。
-- Core 已增加 ZIP、7Z、RAR、TAR 格式注册表。
-- Core 已增加有界 stdout/stderr 的 7-Zip 进程运行器、技术列表解析器、条目验证器和 staging 验证器。
-- 默认 Core 工作流已切换为内置 7-Zip；旧 `ArchiveExtractor` 仅保留为 V1 测试兼容实现，不再是生产默认路径。
-- GUI、CLI 和 Explorer 已扩展为四种格式；真实 RAR 夹具和干净 VM Developer RC 验收仍待补齐。
-
-V1.0 的交付定义是 Windows 11 x64 Developer RC。它通过 Windows Developer Mode 部署 packaged 自包含应用，不承诺公开签名安装包。
-
-## 2. 已确定的产品边界
-
-- UI、CLI 和 Explorer 菜单使用简体中文。
-- V1 只支持单个 ZIP；V2 扩展为单个 ZIP、7Z、RAR 或 TAR。
-- V1 只支持 Windows 11 x64。
-- 每次使用 Windows 原生 Folder Picker 选择目标父目录。
-- 最终目录为“父目录\\压缩包文件名（去一层扩展名）”。
-- 同名目标目录存在时失败并要求重新选择，不覆盖、不合并、不自动改名。
-- 单实例、单任务。
-- 支持安全取消；Publishing 和 Recycling 开始后取消按钮禁用。
-- 解压失败、取消或回收失败时，源 ZIP 永久保留。
-- 不自动提权，不提供永久删除回退。
-- 不做批量、密码、其他压缩格式、设置页、自动更新、主题和多语言。
-
-## 3. 总体架构
+## 3. 组件边界
 
 ```text
-Windows Explorer
-        ↓  IExplorerCommand / AppUserModelID
-Packaged WinUI 3 GUI
-        ↓
-ExtractionService
-      ↙   ↘
-IArchiveExtractor  ICleanupService
-      ↓                   ↓
-SevenZipArchiveExtractor  Windows IFileOperation
+Explorer COM Shell Extension (C++)
+        │ --archive 完整 Unicode 路径
+        ▼
+Packaged WinUI 3 GUI ── WindowsShellDestinationPublisher ── IFileOperation
+        │
+        └────────────── ExtractionService (Core) ── SevenZipArchiveExtractor
+                                      │
+                                      └── CleanupService (IFileOperation + recycle)
+
+CLI ── ExtractionService (Core) ── AtomicDirectoryPublisher
 ```
 
-CLI 和 GUI 都是入口层，业务安全边界只有 `ExtractionService`。
+Shell Extension 只解析单个选中项并激活 GUI，不读取压缩包、不创建文件、不解压、不回收。GUI 和 CLI 共享验证、7-Zip 扫描/解压、源身份检查、staging 清理和回收逻辑，不复制 Core 业务规则。
 
-Core 不依赖 WinUI、Explorer 或 CLI。
-
-## 4. Core 安全工作流
-
-```text
-验证请求和格式
-  ↓
-锁定源文件并使用 7-Zip 扫描条目
-  ↓
-检查路径、重复项、符号链接和空间
-  ↓
-创建同卷 staging 目录
-  ↓
-逐条异步解压
-  ↓
-失败/取消 → 清理 staging，保留源 ZIP
-  ↓
-全部成功 → Directory.Move(staging, final)
-  ↓
-确认源文件身份没有改变
-  ↓
-IFileOperation + FOFX_RECYCLEONDELETE
-  ↓
-成功：Completed
-失败：CleanupFailed，输出和源 ZIP 均保留
-```
-
-最终目录必须在全部解压成功后一次性发布，避免损坏 ZIP 留下用户可见的半成品目录。
-
-实现规则：
-
-- 源文件扩展名按 `OrdinalIgnoreCase` 判断为 `.zip`、`.7z`、`.rar` 或 `.tar`；`.tar.gz` 等复合扩展名不支持。
-- 7-Zip 技术列表先完整扫描，再检查格式类型、声明总大小、溢出、目标卷可用空间、绝对路径、盘符路径、`..` 穿越、Windows 大小写重复路径、文件/目录冲突、加密、分卷、符号链接、硬链接、ADS、设备和 reparse 属性。
-- staging 目录在最终目录同级生成随机 GUID 名称，保证与最终目录同卷；文件使用 `FileMode.CreateNew`、异步复制、取消令牌和有限缓冲区，目录条目也被保留。
-- 所有条目成功后使用同卷 `Directory.Move` 发布；发布失败不搬运单个文件。staging 清理会拒绝穿越 reparse-point，并在失败时返回准确路径。
-- 解压期间源 ZIP 以禁止写入/删除的共享模式打开，并在发布前、回收前比较卷序列号、文件 ID、长度和最后写入时间。
-
-取消窗口只存在于 Scanning 和 Extracting。取消会关闭源句柄、清理 staging、保持最终目录不存在并保留源 ZIP；Publishing 和 Recycling 开始后取消被忽略，已发布目录不会回滚。
-
-## 5. 公共契约
+## 4. Core 公共契约
 
 ```csharp
 public interface IArchiveExtractor
@@ -107,6 +43,15 @@ public interface IArchiveExtractor
     Task<ArchiveExtractionResult> ExtractAsync(
         string archivePath,
         string stagingPath,
+        IProgress<ExtractionProgress>? progress,
+        CancellationToken cancellationToken);
+}
+
+public interface IDestinationPublisher
+{
+    Task<DestinationPublishResult> PublishAsync(
+        string stagingPath,
+        string destinationPath,
         IProgress<ExtractionProgress>? progress,
         CancellationToken cancellationToken);
 }
@@ -125,98 +70,115 @@ public sealed class ExtractionService
 }
 ```
 
-工作流结果至少区分：
+发布器策略由宿主注入：`AtomicDirectoryPublisher` 用于 CLI，`WindowsShellDestinationPublisher` 用于 GUI。`IDestinationPublisherPolicy` 仅提供是否允许已有目录和发布阶段是否可取消的宿主能力信息。
+
+状态类型：
 
 ```text
-Completed
-Cancelled
-ValidationFailed
-ExtractionFailed
-PublishFailed
-CleanupFailed
+WorkflowStage: Validating, Scanning, Extracting, Publishing, Recycling, Completed
+WorkflowOutcome: Completed, CompletedWithSkippedItems, Cancelled,
+                 ValidationFailed, ExtractionFailed, PublishFailed, CleanupFailed
+DestinationPublishOutcome: Completed, CompletedWithSkippedItems, Cancelled, Failed
+DestinationState: Unchanged, PartiallyModified, CompletedWithSkippedItems, Completed
+SourceDisposition: Recycled, Retained, MissingOrChanged
 ```
 
-结果还必须包含稳定错误码、简体中文用户信息、源文件处理状态和目标目录是否已发布。调用方不得解析异常文本判断业务状态。
+`ExtractAndDeleteResult.DestinationPublished` 是兼容属性，仅在 `DestinationState.Completed` 时为真。`Success` 还要求 `SourceDisposition.Recycled`，因此“解压完整但回收失败”不会被误判为完整成功。
 
-当前错误码还包括：`ArchiveEncrypted`、`MultiVolumeArchiveNotSupported`、`UnsupportedArchiveEntryType`、`ArchiveTooComplex`、`ArchiveEngineUnavailable`、`ArchiveEngineIntegrityFailure`、`ArchiveEngineProtocolFailure`、`ArchiveEngineProcessFailure`、`ArchiveEngineTerminationFailure`、`ArchiveVerificationFailure` 和 `InsufficientMemory`。结果同时提供只读兼容属性 `Success => Outcome == Completed`。
+错误码是稳定枚举，至少包括：源不存在、格式不支持、目标无效、目标已有、ZIP 不可读/加密、危险/重复条目、空间不足、解压 I/O、发布失败、发布取消、跳过条目、目标创建失败、源身份改变、回收站不可用/失败、staging 清理失败和未预期错误。用户界面显示简体中文 `UserMessage`，不解析异常文本来判断业务状态。
 
-`SourceDisposition` 为 `Recycled`、`Retained` 或 `MissingOrChanged`；失败状态永远不调用永久删除 API。
+## 5. 安全解压与 staging
 
-## 6. GUI 设计
+工作流：
 
-GUI 使用 C#、.NET 10、WinUI 3、Windows App SDK 2.3.1、自包含 x64 packaged deployment。
+```text
+验证源与准确目标
+→ 记录源文件 ID、卷序列号、大小和最后写入时间
+→ 创建随机 GUID staging
+→ 7-Zip 列表扫描并验证所有条目
+→ 检查溢出、空间、穿越、重复路径、特殊文件和 reparse
+→ 逐条异步解压到 staging
+→ 再次检查源身份
+→ 检查 staging 输出不会覆盖源包
+→ 调用宿主发布器
+→ 检查发布 HRESULT、逐项回调和 aborted
+→ 清理 staging
+→ 再次检查源身份
+→ 完整且无跳过时移入回收站
+```
 
-窗口包含：
+staging 优先放在目标路径所在卷的最近安全可写祖先；目标父路径缺失或受保护时回退到应用专用临时根。所有清理路径必须是 GUID 前缀目录且拒绝 reparse point、junction 和符号链接。Windows Shell 复制发布会同时占用 staging 和目标空间，因此空间检查采取保守值。
 
-- 压缩包选择（`.zip`、`.7z`、`.rar`、`.tar`）。
-- 目标父目录选择。
-- 只读最终目录预览。
-- 解压并回收按钮。
-- 取消按钮。
-- 进度、当前文件和状态。
+扫描拒绝绝对路径、盘符路径、`..` 穿越、Windows 大小写不敏感重复路径、文件/目录同名冲突、符号链接、硬链接、ADS、设备和 reparse 条目。文件使用 `FileMode.CreateNew`、异步流复制和取消令牌；不继承 ZIP 中的系统、隐藏或可执行权限属性。
 
-Explorer 激活只预填压缩包，目标父目录仍必须由用户选择。
+扫描/解压取消会终止 7-Zip 进程树、关闭句柄、清理 staging、保持目标不变并保留源包。若引擎无法确认进程停止，返回准确 staging 路径，不扩大删除范围。
 
-每次任务必须重新选择父目录；选择 ZIP 会清除旧父目录。最终目录冲突时禁止执行并提示重新选择，不覆盖、不合并、不自动加序号。执行期间路径控件、重复执行和新的任务均禁用；完成后保留路径和结果，成功状态在重新选择 ZIP 前保持禁用。进度按字节显示，零字节 ZIP 按条目显示；回收失败显示黄色警告，不自动打开目录、不发通知、不播放声音。窗口关闭在可取消阶段请求取消并等待清理，在发布/回收阶段阻止关闭。
+## 6. Windows Shell 发布器
 
-GUI 通过 `AppInstance` 使用固定主实例。空闲时收到 Explorer 的新 ZIP 激活会清除旧父目录；运行中只前置现有窗口并显示“当前已有解压任务正在进行”，不替换路径、不排队。第二次直接启动同样只前置主窗口。
+`WindowsShellDestinationPublisher` 在专用 STA 线程初始化 COM，创建 `IFileOperation`，调用 `SetOwnerWindow` 绑定 WinUI 主窗口，注册 `IFileOperationProgressSink`，并对 staging 每个顶层项目排队 `CopyItem`。目标缺失目录由 `NewItem` 逐级创建，已有目录直接解析。
 
-## 7. Explorer 集成
+不设置 `FOF_SILENT`、`FOF_NOCONFIRMATION`、`FOF_NOERRORUI` 或 `FOF_RENAMEONCOLLISION`。允许 `FOFX_SHOWELEVATIONPROMPT` 和 `FOFX_NOCOPYSECURITYATTRIBS`。应用本身不以管理员运行；只有用户确认的 Windows 文件操作可显示 UAC。
 
-`ExtractAndDelete.ShellExtension` 是 x64 原生 C++ COM DLL：
+`PerformOperations` 返回后无论 HRESULT 如何都调用 `GetAnyOperationsAborted`。`PostCopyItem.hrCopy` 分类如下：
 
-- 实现 `IExplorerCommand`。
-- 只注册 `.zip`、`.7z`、`.rar` 和 `.tar`。
-- 只允许单选。
-- 只读取选中路径并激活 GUI。
-- 不解压、不回收、不执行慢 I/O。
+```text
+S_OK、S_FALSE、COPYENGINE_S_MERGE、COPYENGINE_S_KEEP_BOTH、
+COPYENGINE_S_COLLISIONRESOLVED、COPYENGINE_S_ALREADY_DONE → 成功
+COPYENGINE_S_USER_IGNORED → 跳过
+COPYENGINE_E_USER_CANCELLED 或 aborted → 取消
+其他 HRESULT → 发布失败
+```
 
-Package manifest 使用 `windows.comServer` 和 `windows.fileExplorerContextMenus` 注册 DLL。
+所有项目成功才进入回收；跳过返回 `CompletedWithSkippedItems` 并保留源包；取消/错误允许保留 Shell 已写入的部分目标并保留源包。空 staging 仍创建目标并视为完整发布。
 
-Shell Extension 使用固定 CLSID、x64 架构和包身份，只对单个四格式压缩包显示/启用命令“解压并回收”。`Invoke` 只获取完整 Unicode 路径，通过 `IApplicationActivationManager` 传递 `--archive` 参数；不执行解压、回收或文件写入，所有异常在 COM 边界转为 HRESULT。
+不直接调用 `zipfldr.dll` 私有 `extract` 动词：系统提取窗口没有受支持的完整成功/跳过/取消回调，不能安全地把返回当作回收依据。V3 复刻向导外观，但把真正的合并、冲突、错误、进度和 UAC 交给公开的 `IFileOperation`。
 
-回收服务在专用 STA 线程创建 `IFileOperation`，设置 `FOFX_RECYCLEONDELETE`、early-failure、静默/无确认/无错误 UI 标志，检查实际 HRESULT 和 `GetAnyOperationsAborted`。不提权、不调用 `File.Delete`、不提供永久删除 fallback；回收失败时输出和源 ZIP 都保留。
+## 7. GUI 交互
 
-## 8. 测试要求
+初始窗口按 Windows 11 中文“提取压缩文件夹”结构复刻：返回箭头、压缩文件夹图标、蓝色标题、一个可编辑目标框、`浏览(R)...`、默认勾选的“完成时显示提取的文件(H)”、`提取并回收(E)` 和 `取消`。使用系统字体、主题、高 DPI 和高对比度；不复制私有 Windows 位图或 DLL。
 
-普通测试不操作真实回收站，使用 fake `ICleanupService` 验证调用边界。真实 `IFileOperation` 测试单独标记为 Windows Integration。
+开始菜单启动先显示原生 File Picker，取消即退出。Explorer 激活填入路径和默认目标。空闲时新激活替换向导状态并恢复勾选；运行中只前置窗口并拒绝新任务。完整成功按勾选打开目标，然后自动关闭；回收失败会打开目标但保留警告窗口；跳过、取消和发布失败保留窗口。
 
-必须覆盖：四种格式的正常、空目录和 Unicode 文件；损坏/截断、加密、分卷、路径穿越、重复条目、文件/目录冲突、符号链接、硬链接、ADS、设备条目、目标冲突、staging 失败、复制失败、发布失败、取消、源文件改变、引擎缺失/篡改、回收失败和单实例激活。
+运行中锁定路径和浏览按钮。扫描、解压、GUI Shell 发布可取消；回收阶段不可取消。关闭窗口在可取消阶段询问并等待清理，发布/回收阶段阻止关闭。打开目标使用 `ProcessStartInfo.ArgumentList`，不经 PowerShell、cmd 或字符串 shell。
 
-普通测试使用 fake `IArchiveExtractor`/`ICleanupService`，覆盖默认启动、Unicode/空格/`&`/括号参数、Folder Picker 后才能执行、目标冲突、运行中二次激活、各 Outcome 文案和取消按钮状态。Windows Integration 只使用唯一临时文件验证真实回收站路径消失和 aborted/error 状态，失败时绝不尝试永久删除。
+## 8. CLI 与 Explorer
 
-Developer RC 的手工验收必须在干净 Windows 11 x64、Developer Mode、无 .NET/Windows App SDK/系统 7-Zip 的虚拟机完成：自包含 GUI 启动、四种格式现代菜单、非支持格式/多选过滤、中文和特殊路径传递、单实例激活、损坏/加密/分卷压缩包、大 ZIP 取消、发布后取消、引擎完整性失败、回收失败保留语义，以及注销包后 Explorer 命令和残留注册消失。
+CLI：
 
-## 9. 版本路线
+```text
+ExtractAndDelete.Cli.exe <压缩包路径> <准确目标目录>
+```
 
-### V1.0
+CLI 目标必须不存在，不弹冲突/UAC；使用同卷 staging + `Directory.Move`。退出码 `0` 完整成功、`1` 验证/解压/发布失败、`2` 回收失败、`3` 安全取消。
 
-完成 Core 安全工作流、CLI、WinUI GUI、Windows 11 现代 Explorer 菜单和 Developer Mode 部署验收。
+Explorer 清单固定注册 `.zip`、`.7z`、`.rar`、`.tar`，单选启用、多选禁用。Package identity 保持：`ExtractAndDelete`、`CN=ExtractAndDelete Developer`、Application Id `App`、固定 CLSID `4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E`，V3 版本 `3.0.0.0`。
 
-### V2.0
+## 9. 测试和验收
 
-保留 V1 接口和 staging 工作流，新增随包分发的官方 7-Zip `7z.exe + 7z.dll` 进程引擎，首批支持 ZIP、7z、RAR、TAR。非零退出码全部按失败处理，许可证和二进制哈希必须随包记录。
+普通测试覆盖格式、危险条目、重复路径、空间/溢出、源身份、staging 清理、目标路径、发布结果映射、跳过/取消/部分完成、回收失败和 GUI ViewModel。发布器使用 fake adapter 确定性模拟 `S_OK`、merge、keep-both、skip、cancel、aborted、UAC 拒绝和部分失败。
 
-V2 不搜索 PATH、不直接 P/Invoke `7z.dll`，使用固定包内绝对路径、`UseShellExecute=false`、`ArgumentList`、stdout/stderr 上限和进程树取消。生产默认入口是 `SevenZipArchiveExtractor`；`SevenZipProcessRunner` 在取消时确认进程退出，否则保留 staging。成功后继续复用 V1 的发布、源身份检查和回收逻辑。密码、多卷、复合扩展名、批量、覆盖/跳过/自动改名、Windows 10、ARM64、公开签名安装包和 Store 发布延期。V2 固定官方 7-Zip 26.02 和 SHA-256，随包提供许可证、Third-Party Notices 和源码链接；任何格式失败、进程崩溃或取消仍不得发布最终目录或回收源文件。
+Windows Integration 测试只使用唯一临时路径，覆盖真实回收站、Unicode/空格/`&`/括号目标、新目录发布和已有目录无冲突合并；不自动触发真实冲突框或 UAC，不删除测试范围外文件。
 
-## 10. 构建、部署和工具链
-
-普通 C# 构建与测试：
+最终验收顺序：
 
 ```powershell
-dotnet restore .\ExtractAndDelete.slnx
-dotnet build .\ExtractAndDelete.slnx --configuration Release --no-restore
-dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter "Category!=WindowsIntegration"
+.\scripts\verify.ps1
+dotnet test .\ExtractAndDelete.slnx --configuration Release --filter "Category=WindowsIntegration"
+.\scripts\acceptance-check.ps1
+.\scripts\deploy-dev.ps1
+.\scripts\verify-dev-install.ps1
 ```
 
-`scripts/verify.ps1` 会额外用 MSBuild 构建 x64 C++ Shell Extension，再执行相同的 Release 构建和普通测试。它要求 Visual Studio Native Desktop、x64 MSVC 和 Windows SDK；真实回收站测试使用 `Category=WindowsIntegration` 单独运行。
+必须确认四种格式、冲突替换/跳过/保留两者、两阶段取消、UAC 拒绝、回收失败、单实例激活、开始菜单启动、注销刷新和 package `3.0.0.0 / Ok`。
 
-`scripts/check-dev-environment.ps1` 只读检查 Developer Mode、Windows build、.NET SDK、Visual Studio/MSBuild、x64 工具链和 Windows SDK；`scripts/deploy-dev.ps1` 在 Developer Mode 下先完成构建输出验证，再注册准确的 package manifest，并在注册后调用 `scripts/verify-dev-install.ps1`；`scripts/uninstall-dev.ps1` 只注销固定 `ExtractAndDelete` identity 并确认注销结果。仓库不包含 `.pfx`、签名包或正式发布配置。
+## 10. Git 与后续路线
 
-`scripts/verify-third-party.ps1` 检查固定 7-Zip 二进制和许可证哈希；`scripts/acceptance-check.ps1` 只检查自包含 x64 输出（无外部 Windows App Runtime 依赖且包含 runtime DLL/PNG 资源）、固定包身份、四种菜单、GUI/CLI 中的 7-Zip 文件和仓库中没有证书/签名包，不检查 package 注册；`scripts/verify-dev-install.ps1` 单独检查当前用户的 package 状态、安装目录、清单版本、固定 CLSID、四种菜单和注册目录文件。所有脚本均使用精确路径和固定包身份，不搜索或卸载其他包。
+直接在 `main` 分阶段提交，不创建 Issue、PR 或额外分支，不 force-push，不提交证书、签名包或用户文件。建议提交边界：
 
-## 11. 开发流程
+1. `refactor(core): introduce destination publisher contracts`
+2. `feat(core): add interactive Windows shell publishing`
+3. `feat(gui): mirror the Windows extraction wizard`
+4. `test(v3): cover merge skip cancellation and recycling`
+5. `docs(build): publish the v3 developer workflow`
 
-不使用 Issue、PR 或额外开发分支。V0.5 收口后直接在 `main` 上按阶段 commit、测试并 push。禁止 force-push、提交证书或跳过失败测试。
-
-V1 的完成定义：Release 无警告、普通测试和 Windows Integration 全绿；GUI、CLI、Explorer 共用同一 Core 工作流；失败/取消不发布半成品、既有目录不变、回收失败不永久删除；无自动提权；Developer Mode 注册、运行、注销和文档与真实行为一致。当前工作区已完成 C#、Core、CLI、GUI、Shell 源码、脚本和自动检查；本机若未安装 Native Desktop/C++/Windows SDK，只能明确报告 Shell DLL 和 VM 验收待在具备该工具链的 Windows 11 环境完成。
+V2 的 7-Zip 引擎和 V3 staging/publisher 契约是后续扩展基础；任何未来格式或引擎失败都必须继续满足“不发布半成品、不修改既有目录、不回收源包”。

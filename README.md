@@ -10,7 +10,7 @@
 只有解压完整成功且回收成功 → 工作流完成
 ```
 
-当前状态：V2 的 Core、GUI、CLI、Explorer Shell 和内置 7-Zip 26.02 x64 已实现。项目交付形态仍是 Windows 11 x64 Developer RC；真实 Shell DLL 部署和干净 VM 验收需要 Developer Mode、Native Desktop/Windows SDK。
+当前状态：V3 的 Core、GUI、CLI、Explorer Shell 和内置 7-Zip 26.02 x64 已实现。GUI 使用 Windows 风格的单一准确目标路径，并通过 Windows Shell 文件操作处理目录合并、冲突、错误和 UAC；项目交付形态仍是 Windows 11 x64 Developer RC，需要 Developer Mode、Native Desktop/Windows SDK。
 
 ## 构建和测试
 
@@ -26,12 +26,12 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter 
 ## CLI
 
 ```powershell
-ExtractAndDelete.Cli.exe <压缩包路径> <最终目标目录>
+ExtractAndDelete.Cli.exe <压缩包路径> <准确目标目录>
 ```
 
 开发部署使用 `.\scripts\deploy-dev.ps1`，注册状态检查使用 `.\scripts\verify-dev-install.ps1`，注销使用 `.\scripts\uninstall-dev.ps1`。脚本只处理固定的 `ExtractAndDelete` package identity，不会搜索或删除其他包。`acceptance-check.ps1` 只检查构建输出，不代表 package 已注册。
 
-完整安装、GUI、Explorer 右键菜单、CLI、支持格式和常见问题见 [docs/USAGE.md](docs/USAGE.md)。
+GUI 的 Windows 原生风格提取流程、Explorer 右键菜单、CLI、支持格式、冲突/取消/回收语义和部署顺序见 [docs/USAGE.md](docs/USAGE.md)。
 
 ## 设计文档
 

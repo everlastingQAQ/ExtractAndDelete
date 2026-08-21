@@ -31,6 +31,20 @@ try {
     $manifestPath = Join-Path $outputPath 'AppxManifest.xml'
     if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest was not produced: $manifestPath" }
 
+    foreach ($requiredRelativePath in @(
+        'ExtractAndDelete.Gui.exe',
+        'ExtractAndDelete.ShellExtension.dll',
+        'Microsoft.WindowsAppRuntime.dll',
+        'ThirdParty\7-Zip\7z.exe',
+        'ThirdParty\7-Zip\7z.dll',
+        'ThirdParty\7-Zip\licenses\License.txt',
+        'THIRD-PARTY-NOTICES.md')) {
+        $requiredPath = Join-Path $outputPath $requiredRelativePath
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "Required V3 package file is missing: $requiredPath"
+        }
+    }
+
     & (Join-Path $repoRoot 'scripts\acceptance-check.ps1') -Configuration Release
 
     $existingPackages = @(Get-AppxPackage -Name 'ExtractAndDelete' -ErrorAction SilentlyContinue)

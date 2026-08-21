@@ -10,11 +10,13 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\net10.0-windows10.0.22000.0\win-x64"
 $manifestPath = Join-Path $guiOutput 'AppxManifest.xml'
 $shellPath = Join-Path $guiOutput 'ExtractAndDelete.ShellExtension.dll'
+$guiExePath = Join-Path $guiOutput 'ExtractAndDelete.Gui.exe'
 $cliPath = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ExtractAndDelete.Cli.dll"
 $guiSevenZipRoot = Join-Path $guiOutput 'ThirdParty\7-Zip'
 $cliSevenZipRoot = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ThirdParty\7-Zip"
 
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest is missing: $manifestPath" }
+if (-not (Test-Path -LiteralPath $guiExePath -PathType Leaf)) { throw "GUI executable is missing: $guiExePath" }
 if (-not (Test-Path -LiteralPath $cliPath)) { throw "CLI output is missing: $cliPath" }
 if (-not (Test-Path -LiteralPath $shellPath)) {
     throw "Shell extension output is missing. Build scripts/verify.ps1 first with the Native Desktop workload."
@@ -27,6 +29,17 @@ foreach ($root in @($guiSevenZipRoot, $cliSevenZipRoot)) {
         }
     }
 }
+$requiredGuiFiles = @(
+    $guiExePath,
+    (Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'),
+    (Join-Path $guiOutput 'ThirdParty\7-Zip\licenses\License.txt'),
+    (Join-Path $guiOutput 'THIRD-PARTY-NOTICES.md')
+)
+foreach ($requiredFile in $requiredGuiFiles) {
+    if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+        throw "Required V3 GUI package file is missing: $requiredFile"
+    }
+}
 
 [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
 $namespace = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
@@ -37,6 +50,7 @@ $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/w
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
 if ($null -eq $identity -or $identity.Name -ne 'ExtractAndDelete') { throw 'Package identity is not ExtractAndDelete.' }
+if ($identity.Version -ne '3.0.0.0') { throw "Package version is not V3 3.0.0.0: $($identity.Version)" }
 $runtimeDependency = $manifest.SelectSingleNode('//foundation:PackageDependency[contains(@Name, "WindowsAppRuntime")]', $namespace)
 if ($null -ne $runtimeDependency) { throw 'The package still depends on an external Windows App SDK runtime.' }
 $runtimeDll = Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'
@@ -63,7 +77,7 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V2 Developer RC output layout checks passed.'
+Write-Host 'V3 Developer RC output layout checks passed.'
 Write-Host 'Package registration was not checked.'
 Write-Host 'Run scripts\verify-dev-install.ps1 after deploy-dev.ps1.'
 Write-Host "Package identity: $($identity.Name)"
