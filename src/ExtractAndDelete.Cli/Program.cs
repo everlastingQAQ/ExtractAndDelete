@@ -2,7 +2,7 @@ using ExtractAndDelete.Core;
 
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("用法：ExtractAndDelete.Cli.exe <压缩包路径> <最终目标目录>");
+    Console.Error.WriteLine("用法：ExtractAndDelete.Cli.exe <压缩包路径> <准确目标目录>");
     return 1;
 }
 
