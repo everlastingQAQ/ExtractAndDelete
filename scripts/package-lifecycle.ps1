@@ -7,7 +7,7 @@ param(
     [string]$ManifestPath,
     [string]$InstallRoot,
     [string]$PayloadPath,
-    [string]$ExpectedVersion = '4.1.0.0',
+    [string]$ExpectedVersion = '4.1.1.0',
     [string]$ExpectedPackageName = 'ExtractAndDelete',
     [string]$ExpectedPublisher = 'CN=ExtractAndDelete Developer',
     [string]$ExpectedFamilyName = 'ExtractAndDelete_vyz6krqqgd78c',
@@ -121,7 +121,11 @@ function Get-ManifestIdentity {
 }
 
 function Assert-Manifest {
-    param([Parameter(Mandatory = $true)][string]$Path, [string]$Version)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$Version,
+        [switch]$AllowLegacyRegistrationEntryPoint
+    )
 
     $parsed = Get-ManifestIdentity $Path
     $identity = $parsed.Identity
@@ -138,6 +142,18 @@ function Assert-Manifest {
     }
     if ($application.GetAttribute('Id') -ne $ExpectedApplicationId) {
         throw "清单 Application Id 不匹配：$($application.GetAttribute('Id'))"
+    }
+    if (-not $AllowLegacyRegistrationEntryPoint) {
+        if ($identity.GetAttribute('ProcessorArchitecture') -ne 'x64') {
+            throw "清单 ProcessorArchitecture 不匹配：$($identity.GetAttribute('ProcessorArchitecture'))"
+        }
+        if ($application.GetAttribute('Executable') -ne 'ExtractAndDelete.Gui.exe' -or
+            $application.GetAttribute('EntryPoint') -ne 'Windows.FullTrustApplication') {
+            throw "清单不是有效的 loose-registration 入口：$($application.GetAttribute('Executable')) / $($application.GetAttribute('EntryPoint'))"
+        }
+        if ($parsed.Manifest.OuterXml -match '\$targetnametoken\$|\$targetentrypoint\$') {
+            throw '清单仍包含 MSIX 构建占位符。'
+        }
     }
 
     $comClass = $parsed.Manifest.SelectSingleNode("//*[local-name()='Class' and @Id='$ExpectedClsid']")
@@ -160,6 +176,45 @@ function Assert-Manifest {
 
 function Get-CurrentPackages {
     return (, @(Get-AppxPackage -Name $ExpectedPackageName -ErrorAction SilentlyContinue))
+}
+
+function Get-RegisteredManifestPath {
+    param([Parameter(Mandatory = $true)]$Package)
+
+    $location = [string]$Package.InstallLocation
+    if ([string]::IsNullOrWhiteSpace($location)) {
+        return $null
+    }
+
+    try {
+        $fullLocation = Get-FullPath $location
+    }
+    catch {
+        return $null
+    }
+
+    $manifestPath = Join-Path $fullLocation 'AppxManifest.xml'
+    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+        return $manifestPath
+    }
+
+    return $null
+}
+
+function Wait-ForPackageGone {
+    param([int]$TimeoutSeconds = 30)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $remaining = Get-CurrentPackages
+        if ($remaining.Count -eq 0) {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+
+    $remaining = Get-CurrentPackages
+    throw "package 注销超时，仍然存在：$($remaining.PackageFullName -join ', ')"
 }
 
 function Assert-PackageIdentity {
@@ -339,7 +394,8 @@ function Register-AndVerify {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$ExpectedLocation,
-        [Parameter(Mandatory = $true)][string]$Version
+        [Parameter(Mandatory = $true)][string]$Version,
+        [switch]$AllowLegacyRegistrationEntryPoint
     )
 
     Write-Log "注册清单 $Path"
@@ -357,11 +413,12 @@ function Register-AndVerify {
     if ([string]$package.Version -ne $Version) {
         throw "package 版本不匹配：$($package.Version)，预期 $Version"
     }
-    if (-not (Test-SamePath ([string]$package.InstallLocation) $ExpectedLocation)) {
+    if ([string]::IsNullOrWhiteSpace([string]$package.InstallLocation) -or
+        -not (Test-SamePath ([string]$package.InstallLocation) $ExpectedLocation)) {
         throw "package 安装目录不匹配：$($package.InstallLocation)"
     }
 
-    Assert-Manifest (Join-Path $package.InstallLocation 'AppxManifest.xml') $Version
+    Assert-Manifest (Join-Path $package.InstallLocation 'AppxManifest.xml') $Version -AllowLegacyRegistrationEntryPoint:$AllowLegacyRegistrationEntryPoint
     Write-Log "package 注册验证通过：$($package.PackageFullName)"
 }
 
@@ -379,6 +436,7 @@ function Invoke-Install {
 
     $oldPackage = $null
     $oldManifest = $null
+    $oldInstallLocation = $null
     if ($packages.Count -eq 1) {
         $oldPackage = $packages[0]
         Assert-PackageIdentity $oldPackage
@@ -388,16 +446,28 @@ function Invoke-Install {
             throw "当前已安装版本 $oldVersion 高于 $ExpectedVersion，拒绝降级。"
         }
 
-        $oldManifest = Join-Path ([string]$oldPackage.InstallLocation) 'AppxManifest.xml'
-        if (-not (Test-Path -LiteralPath $oldManifest -PathType Leaf)) {
-            throw "旧 package 清单不存在，无法安全回滚：$oldManifest"
+        $oldInstallLocation = [string]$oldPackage.InstallLocation
+        $oldManifest = Get-RegisteredManifestPath $oldPackage
+        if ($null -eq $oldManifest) {
+            Write-Log "旧 package 安装位置为空或清单不存在，将作为损坏残留修复：版本 $($oldPackage.Version)，位置 '$oldInstallLocation'"
         }
-        Assert-Manifest $oldManifest ([string]$oldPackage.Version)
-        Write-Log "记录旧 package：版本 $($oldPackage.Version)，位置 $($oldPackage.InstallLocation)"
+        else {
+            try {
+                # 4.1.0 used the MSIX build tokens in its loose-registration
+                # manifest. Keep it as a rollback candidate, but do not treat
+                # it as a valid new payload.
+                Assert-Manifest $oldManifest ([string]$oldPackage.Version) -AllowLegacyRegistrationEntryPoint
+                Write-Log "记录旧 package：版本 $($oldPackage.Version)，位置 $oldInstallLocation"
+            }
+            catch {
+                Write-Log "旧 package 清单不完整，将作为损坏残留修复：$($_.Exception.Message)"
+            }
+        }
     }
 
     if ($null -ne $oldPackage) {
         Remove-ExactPackage $oldPackage
+        Wait-ForPackageGone
     }
 
     $newManifest = Join-Path $PayloadPath 'AppxManifest.xml'
@@ -421,7 +491,7 @@ function Invoke-Install {
 
         if ($null -ne $oldManifest) {
             try {
-                Register-AndVerify $oldManifest ([string]$oldPackage.InstallLocation) ([string]$oldPackage.Version)
+                Register-AndVerify $oldManifest $oldInstallLocation ([string]$oldPackage.Version) -AllowLegacyRegistrationEntryPoint
                 throw "新 package 注册失败，旧 package 已恢复。原错误 $(Get-HResultText $newError)：$($newError.Message)"
             }
             catch {
@@ -452,11 +522,18 @@ function Invoke-Preflight {
             throw "当前已安装版本 $($package.Version) 高于 $ExpectedVersion，拒绝降级。"
         }
 
-        $oldManifest = Join-Path ([string]$package.InstallLocation) 'AppxManifest.xml'
-        if (-not (Test-Path -LiteralPath $oldManifest -PathType Leaf)) {
-            throw "旧 package 清单不存在，无法安全回滚：$oldManifest"
+        $oldManifest = Get-RegisteredManifestPath $package
+        if ($null -eq $oldManifest) {
+            Write-Log "检测到损坏的 ExtractAndDelete package 残留，将由新版本修复。InstallLocation='$([string]$package.InstallLocation)'"
         }
-        Assert-Manifest $oldManifest ([string]$package.Version)
+        else {
+            try {
+                Assert-Manifest $oldManifest ([string]$package.Version) -AllowLegacyRegistrationEntryPoint
+            }
+            catch {
+                Write-Log "检测到旧 package 清单包含历史入口问题，将由新版本修复：$($_.Exception.Message)"
+            }
+        }
     }
 }
 
@@ -473,11 +550,7 @@ function Invoke-Uninstall {
     }
 
     Remove-ExactPackage $packages[0]
-    Start-Sleep -Milliseconds 300
-    $remaining = Get-CurrentPackages
-    if ($remaining.Count -ne 0) {
-        throw "package 注销后仍然存在：$($remaining.PackageFullName -join ', ')"
-    }
+    Wait-ForPackageGone
     Write-Log 'package 已注销。'
 }
 

@@ -99,7 +99,7 @@ namespace
         LONG status = GetCurrentPackageInfo(0, &length, nullptr, &count);
         if (status != ERROR_INSUFFICIENT_BUFFER || length == 0 || count == 0)
         {
-            return L"ExtractAndDelete!App";
+            return {};
         }
 
         std::vector<BYTE> buffer(length);
@@ -107,19 +107,19 @@ namespace
         if (GetCurrentPackageInfo(0, &length, buffer.data(), &count) != ERROR_SUCCESS
             || count == 0)
         {
-            return L"ExtractAndDelete!App";
+            return {};
         }
 
         UINT32 familyNameLength = 0;
         if (PackageFamilyNameFromId(&packageInfo[0].packageId, &familyNameLength, nullptr) != ERROR_INSUFFICIENT_BUFFER)
         {
-            return L"ExtractAndDelete!App";
+            return {};
         }
 
         std::vector<wchar_t> familyName(familyNameLength);
         if (PackageFamilyNameFromId(&packageInfo[0].packageId, &familyNameLength, familyName.data()) != ERROR_SUCCESS)
         {
-            return L"ExtractAndDelete!App";
+            return {};
         }
 
         return std::wstring(familyName.data()) + L"!App";
@@ -127,6 +127,12 @@ namespace
 
     HRESULT ActivateGui(const std::wstring& archivePath)
     {
+        const std::wstring appUserModelId = GetAppUserModelId();
+        if (appUserModelId.empty())
+        {
+            return HRESULT_FROM_WIN32(APPMODEL_ERROR_NO_PACKAGE);
+        }
+
         IApplicationActivationManager* activationManager = nullptr;
         HRESULT hr = CoCreateInstance(
             CLSID_ApplicationActivationManager,
@@ -141,7 +147,7 @@ namespace
         std::wstring arguments = L"--archive " + QuoteCommandLineArgument(archivePath);
         DWORD processId = 0;
         hr = activationManager->ActivateApplication(
-            GetAppUserModelId().c_str(),
+            appUserModelId.c_str(),
             arguments.c_str(),
             AO_NONE,
             &processId);

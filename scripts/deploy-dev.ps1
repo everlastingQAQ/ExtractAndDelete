@@ -33,6 +33,26 @@ try {
     $manifestPath = Join-Path $outputPath 'AppxManifest.xml'
     if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest was not produced: $manifestPath" }
 
+    # dotnet publish may leave the source MSIX tokens in loose-file output.
+    # Normalize the manifest before Add-AppxPackage -Register so Explorer and
+    # the Start menu always have a concrete full-trust executable entry point.
+    [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8
+    $identity = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
+    $application = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Applications']/*[local-name()='Application']")
+    if ($null -eq $identity -or $null -eq $application) { throw 'Packaged manifest is missing Identity or Application.' }
+    $identity.SetAttribute('Version', $expectedPackageVersion)
+    $identity.SetAttribute('ProcessorArchitecture', 'x64')
+    $application.SetAttribute('Executable', 'ExtractAndDelete.Gui.exe')
+    $application.SetAttribute('EntryPoint', 'Windows.FullTrustApplication')
+    if ($manifest.OuterXml -match '\$targetnametoken\$|\$targetentrypoint\$') { throw 'Unable to normalize package manifest placeholders.' }
+    $temporaryManifest = "$manifestPath.tmp"
+    $settings = New-Object System.Xml.XmlWriterSettings
+    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+    $settings.Indent = $true
+    $writer = [System.Xml.XmlWriter]::Create($temporaryManifest, $settings)
+    try { $manifest.Save($writer) } finally { $writer.Dispose() }
+    Move-Item -LiteralPath $temporaryManifest -Destination $manifestPath -Force
+
     foreach ($requiredRelativePath in @(
         'ExtractAndDelete.Gui.exe',
         'ExtractAndDelete.ShellExtension.dll',
@@ -51,13 +71,28 @@ try {
     & (Join-Path $repoRoot 'scripts\acceptance-check.ps1') -Configuration Release
 
     $existingPackages = @(Get-AppxPackage -Name 'ExtractAndDelete' -ErrorAction SilentlyContinue)
+    if ($existingPackages.Count -gt 1) {
+        throw 'Refusing to remove multiple ExtractAndDelete packages during developer deployment.'
+    }
     foreach ($package in $existingPackages) {
-        if ($package.Name -ne 'ExtractAndDelete') { throw "Refusing to remove an unexpected package identity: $($package.Name)" }
-        Remove-AppxPackage -Package $package.PackageFullName
+        if ($package.Name -ne [string]$releaseConfig.packageName -or
+            [string]$package.Publisher -ne [string]$releaseConfig.publisher -or
+            [string]$package.PackageFamilyName -ne [string]$releaseConfig.packageFamilyName) {
+            throw "Refusing to remove a package with unexpected identity: $($package.PackageFullName)"
+        }
+        Remove-AppxPackage -Package $package.PackageFullName -Confirm:$false
+    }
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((@(Get-AppxPackage -Name 'ExtractAndDelete' -ErrorAction SilentlyContinue)).Count -ne 0 -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    $remainingPackages = @(Get-AppxPackage -Name 'ExtractAndDelete' -ErrorAction SilentlyContinue)
+    if ($remainingPackages.Count -ne 0) {
+        throw "Existing ExtractAndDelete package did not unregister within 30 seconds: $($remainingPackages.PackageFullName -join ', ')"
     }
 
     Add-AppxPackage -Register -Path $manifestPath
-    & (Join-Path $repoRoot 'scripts\verify-dev-install.ps1') -Configuration Release
+    & (Join-Path $repoRoot 'scripts\verify-dev-install.ps1') -Configuration Release -ExpectedInstallLocation $outputPath
     Write-Host "Developer package registered and verified from $manifestPath"
 }
 finally {
