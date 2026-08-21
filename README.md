@@ -1,16 +1,19 @@
 # Extract & Delete
 
-面向 Windows 的安全压缩包解压工具：完整解压后，将源压缩包移入 Windows 回收站。
+面向 Windows 11 的安全压缩包解压工具：完整发布后，将源压缩包移入 Windows 回收站。
 
-核心安全承诺：
+安全承诺：
 
 ```text
-解压失败或取消 → 源压缩包保留
-解压成功但回收失败 → 输出保留，源压缩包保留
-只有解压完整成功且回收成功 → 工作流完成
+扫描/解压失败或取消 → 目标不发布，源压缩包保留
+Windows 发布取消或失败 → 已写入的部分目标可能保留，源压缩包保留
+回收失败 → 完整目标和源压缩包都保留，不永久删除
+只有完整发布、没有跳过且成功移入回收站 → 工作流完成
 ```
 
-当前状态：V3 的 Core、GUI、CLI、Explorer Shell 和内置 7-Zip 26.02 x64 已实现。GUI 使用 Windows 风格的单一准确目标路径，并通过 Windows Shell 文件操作处理目录合并、冲突、错误和 UAC；项目交付形态仍是 Windows 11 x64 Developer RC，需要 Developer Mode、Native Desktop/Windows SDK。
+当前版本为 V4 `4.0.0.0` Developer RC：可见 GUI 使用 C# WinForms/Win32 原生控件复刻 Windows 11“提取压缩(Zipped)文件夹”窗口，包内使用官方 7-Zip 26.02 x64，Explorer 右键菜单显示“解压并回收”。
+
+这是 Developer Mode packaged 应用，不是正式签名安装包；不提供公开 MSIX、AppInstaller、MSI 或便携版。部署前必须开启 Windows Developer Mode。
 
 ## 构建和测试
 
@@ -19,21 +22,39 @@ dotnet restore .\ExtractAndDelete.slnx
 dotnet build .\ExtractAndDelete.slnx --configuration Release --no-restore
 dotnet test .\ExtractAndDelete.slnx --configuration Release --no-build --filter "Category!=WindowsIntegration"
 
-# 包含 x64 C++ Explorer DLL 的完整验证（需要 VS Native Desktop + Windows SDK）
+# 包含 x64 Explorer DLL、7-Zip 哈希和完整 Release 检查
 .\scripts\verify.ps1
 ```
 
-## CLI
+开发部署顺序：
 
 ```powershell
-ExtractAndDelete.Cli.exe <压缩包路径> <准确目标目录>
+.\scripts\check-dev-environment.ps1
+.\scripts\deploy-dev.ps1
+.\scripts\verify-dev-install.ps1
 ```
 
-开发部署使用 `.\scripts\deploy-dev.ps1`，注册状态检查使用 `.\scripts\verify-dev-install.ps1`，注销使用 `.\scripts\uninstall-dev.ps1`。脚本只处理固定的 `ExtractAndDelete` package identity，不会搜索或删除其他包。`acceptance-check.ps1` 只检查构建输出，不代表 package 已注册。
+注销：
 
-GUI 的 Windows 原生风格提取流程、Explorer 右键菜单、CLI、支持格式、冲突/取消/回收语义和部署顺序见 [docs/USAGE.md](docs/USAGE.md)。
+```powershell
+.\scripts\uninstall-dev.ps1
+```
 
-## 设计文档
+`acceptance-check.ps1` 只检查构建输出布局，不代表 package 已注册；注册状态必须使用 `verify-dev-install.ps1` 检查。
 
-完整架构、边界、测试和版本路线见 [docs/PROJECT_DESIGN.md](docs/PROJECT_DESIGN.md)。
-开发部署和干净 VM 验收矩阵见 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+## 使用方式
+
+- 开始菜单启动：先选择一个 `.zip`、`.7z`、`.rar` 或 `.tar`。
+- Explorer 中选中恰好一个支持格式，打开 Windows 11 现代菜单，点击“解压并回收”。
+- 向导只有一个“提取到”准确目标路径；默认值为压缩包所在目录加去掉最后扩展名后的文件名。
+- 目标可以是不存在的目录，也可以是已有目录；Windows Shell 负责合并和冲突提示。
+- 只有完整发布且没有跳过文件时，源压缩包才会移入回收站。
+
+CLI 源码保留为历史参考，但 V4 已冻结，不进入默认 solution、测试、发布或用户交付。
+
+## 设计和验收文档
+
+- [使用文档](docs/USAGE.md)
+- [项目总设计](docs/PROJECT_DESIGN.md)
+- [V4 验收说明](docs/ACCEPTANCE.md)
+- [第三方声明](THIRD-PARTY-NOTICES.md)

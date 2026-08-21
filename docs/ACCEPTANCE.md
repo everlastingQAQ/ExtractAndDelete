@@ -1,8 +1,10 @@
-# V3 Developer RC 验收说明
+# Extract & Delete V4 Developer RC 验收说明
+
+V4 版本为 `4.0.0.0`，交付形式是 Windows 11 x64 Developer Mode packaged 应用。可见界面由 WinForms/Win32 原生控件创建；CLI 源码保留但已冻结，不属于默认构建、测试、发布或用户交付。
 
 ## 1. 自动检查
 
-在 Windows 11 x64 仓库根目录执行：
+在仓库根目录执行：
 
 ```powershell
 .\scripts\check-dev-environment.ps1
@@ -11,11 +13,19 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release --filter "Category=W
 .\scripts\acceptance-check.ps1
 ```
 
-要求：x64、Windows build 不低于 22000、Developer Mode 值为 `1`、.NET SDK 10.0.400 feature band、MSBuild/C++ x64/Windows SDK 可定位、7-Zip 26.02 SHA-256 正确、Release 无警告、普通测试全绿、Windows Integration 全绿。
+检查必须满足：
 
-`acceptance-check.ps1` 只检查输出布局：V3 清单版本 `3.0.0.0`、GUI/Shell 输出、自包含 Windows App SDK、四种 Explorer verb、包内 7-Zip 和没有证书/安装包文件。它不检查 package 是否注册。
+- 系统为 Windows 11 x64，build 不低于 22000。
+- Developer Mode 注册表值为 `1`。
+- .NET SDK 10.0.400 feature band、MSBuild、x64 MSVC、Windows SDK 可定位。
+- 内置 7-Zip 26.02 x64 的 SHA-256 正确。
+- Release 构建 0 警告、0 错误，普通测试和 Windows Integration 测试通过。
+- GUI 包含自包含 Windows App SDK、Shell DLL、四种 Explorer verb 和包内 7-Zip。
+- 输出中没有 `.pfx`、`.cer`、`.msix`、`.msixbundle` 或 `.appinstaller`。
 
-## 2. 注册验收
+`acceptance-check.ps1` 只检查磁盘上的 V4 构建输出和布局，不代表 package 已注册；注册状态必须由 `verify-dev-install.ps1` 检查。
+
+## 2. 注册与安装验收
 
 ```powershell
 .\scripts\deploy-dev.ps1
@@ -26,24 +36,29 @@ dotnet test .\ExtractAndDelete.slnx --configuration Release --filter "Category=W
 
 ```text
 Name            ExtractAndDelete
-Version         3.0.0.0
+Version         4.0.0.0
 Status          Ok
 Application Id  App
 Publisher       CN=ExtractAndDelete Developer
 ```
 
-开始菜单应出现 **Extract & Delete**。机器不需要系统 7-Zip、.NET 10 或 Windows App SDK Runtime；发布目录包含自包含运行时和 7-Zip 文件。
+开始菜单应出现 **Extract & Delete**，Explorer 对单个 ZIP、7Z、RAR 或 TAR 显示“解压并回收”。机器不需要系统 7-Zip、.NET 10 或 Windows App SDK Runtime；发布目录包含自包含运行时和 7-Zip 文件。
 
-## 3. GUI 视觉验收
+## 3. 原生窗口与 DPI 验收
 
-在中文 Windows 11 的 100%、150%、200% 缩放和高对比度下，与参考 Windows“提取压缩文件夹”窗口核对：
+在中文 Windows 11、浅色主题、100%、125%、150% 和 200% 缩放下，对照参考 Windows“提取压缩(Zipped)文件夹”窗口检查：
 
-- 返回箭头禁用、压缩文件夹图标、标题“提取压缩文件夹”。
+- 窗口为固定对话框，96 DPI 外框目标为 `784×585`，不能最大化或自由缩放。
+- 返回箭头禁用、压缩文件夹图标、标题“提取压缩(Zipped)文件夹”。
 - 蓝色标题“选择一个目标并提取文件”。
 - 只有一个可编辑目标路径框和 `浏览(R)...`。
 - 复选框“完成时显示提取的文件(H)”默认勾选。
 - 底部按钮“提取并回收(E)”和“取消”。
-- 系统字体、主题、高 DPI 和键盘 AccessKey 可用。
+- 使用系统字体和 Common Controls；窗口为 Per-Monitor DPI V2。
+- 在不同 DPI 显示器之间移动时，文字、边框、复选框和按钮保持清晰，不出现整窗位图拉伸。
+- 高对比度模式使用系统颜色；普通深色主题仍保持锁定的参考浅色外观。
+
+键盘验收：路径框、浏览、复选框、主按钮、取消按钮按顺序获得焦点；Alt+F/R/H/E、Enter 和 Esc 行为正确。
 
 开始菜单启动先弹原生 File Picker，取消后退出；Explorer 激活直接填入压缩包并计算默认目标。
 
@@ -71,9 +86,9 @@ Publisher       CN=ExtractAndDelete Developer
 
 发布完成后检查 staging 是否清理。若清理失败，窗口必须给出准确路径且不得回收源包。
 
-## 5. CLI 与单实例
+## 5. 单实例与 CLI 冻结验收
 
-CLI 使用准确目标参数验证：不存在目标成功；已有目录、相对/无效目标失败且内容不变。Ctrl+C 在扫描/解压阶段返回退出码 `3`；发布/回收阶段显示不可取消并等待。回收失败返回 `2`，普通错误返回 `1`。
+CLI 目录 `src/ExtractAndDelete.Cli` 仅作为历史源码保留，不在 `ExtractAndDelete.slnx` 中，不参与默认 Restore、Release build、test、publish、acceptance 或文档。不要执行单独构建 CLI 的命令，也不要把旧 CLI 输出当作 V4 交付物。
 
 运行 GUI 任务时从 Explorer 激活第二个压缩包：只前置现有窗口，不替换路径，不启动第二个工作流。空闲激活会重置压缩包、默认目标和复选框。
 
