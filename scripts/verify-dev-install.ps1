@@ -37,12 +37,22 @@ if ([string]$package.Status -ne 'Ok') {
     Fail "package 状态不是 Ok：$($package.Status)。"
 }
 
-$registeredPath = [IO.Path]::GetFullPath([string]$package.InstallLocation).TrimEnd('\')
+$installLocationText = [string]$package.InstallLocation
+if ([string]::IsNullOrWhiteSpace($installLocationText)) {
+    Fail 'package InstallLocation 为空，当前注册是损坏或残留状态。请运行 4.1.1 安装器修复。'
+}
+$registeredPath = [IO.Path]::GetFullPath($installLocationText).TrimEnd('\')
 $guiOutput = $registeredPath
 if (-not [string]::IsNullOrWhiteSpace($ExpectedInstallLocation)) {
     $expectedPath = [IO.Path]::GetFullPath($ExpectedInstallLocation).TrimEnd('\')
     if (-not [string]::Equals($registeredPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
         Fail "package 安装目录不匹配。实际：$registeredPath；预期：$expectedPath。"
+    }
+}
+else {
+    $expectedRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\ExtractAndDelete')).TrimEnd('\')
+    if (-not $registeredPath.StartsWith($expectedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        Fail "package 安装目录不在固定安装根目录内：$registeredPath"
     }
 }
 $manifestPath = Join-Path $registeredPath 'AppxManifest.xml'
@@ -68,16 +78,26 @@ if ($identity.Publisher -ne 'CN=ExtractAndDelete Developer') {
     Fail "清单 Publisher 不匹配：$($identity.Publisher)。"
 }
 if ($identity.Version -ne $expectedPackageVersion) {
-    Fail "清单 Version 不匹配，预期 V4.1 $expectedPackageVersion：$($identity.Version)。"
+    Fail "清单 Version 不匹配，预期 V4.1.1 $expectedPackageVersion：$($identity.Version)。"
+}
+$application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
+if ($null -eq $application -or $application.Id -ne 'App') {
+    Fail '清单 Application Id 不是 App。'
+}
+if ($identity.ProcessorArchitecture -ne 'x64' -or
+    $application.Executable -ne 'ExtractAndDelete.Gui.exe' -or
+    $application.EntryPoint -ne 'Windows.FullTrustApplication') {
+    Fail '清单不是有效的 x64 loose-registration 清单。'
+}
+if ($manifest.OuterXml -match '\$targetnametoken\$|\$targetentrypoint\$') {
+    Fail '注册清单仍包含 MSIX 占位符。'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $registeredPath $application.Executable) -PathType Leaf)) {
+    Fail "注册目录缺少清单声明的 GUI EXE：$($application.Executable)"
 }
 $displayName = $manifest.SelectSingleNode('/foundation:Package/foundation:Properties/foundation:DisplayName', $namespace)
 if ($null -eq $displayName -or [string]$displayName.InnerText -ne 'Extract & Delete（系统集成组件）') {
     Fail 'package Properties DisplayName 不是“Extract & Delete（系统集成组件）”。'
-}
-
-$application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
-if ($null -eq $application -or $application.Id -ne 'App') {
-    Fail '清单 Application Id 不是 App。'
 }
 
 $expectedClsid = '4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E'

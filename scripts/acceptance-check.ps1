@@ -71,7 +71,20 @@ $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/w
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
 if ($null -eq $identity -or $identity.Name -ne 'ExtractAndDelete') { throw 'Package identity is not ExtractAndDelete.' }
-if ($identity.Version -ne $expectedPackageVersion) { throw "Package version is not V4.1 $($expectedPackageVersion): $($identity.Version)" }
+if ($identity.Version -ne $expectedPackageVersion) { throw "Package version is not V4.1.1 $($expectedPackageVersion): $($identity.Version)" }
+$application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
+if ($null -eq $application) { throw 'The package Application node is missing.' }
+if ($identity.ProcessorArchitecture -ne 'x64') { throw "Package architecture is not x64: $($identity.ProcessorArchitecture)" }
+if ($application.Executable -ne 'ExtractAndDelete.Gui.exe' -or
+    $application.EntryPoint -ne 'Windows.FullTrustApplication') {
+    throw "Loose-registration entry point is invalid: $($application.Executable) / $($application.EntryPoint)"
+}
+if ($manifest.OuterXml -match '\$targetnametoken\$|\$targetentrypoint\$') {
+    throw 'The loose-registration manifest still contains MSIX build placeholders.'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $guiOutput $application.Executable) -PathType Leaf)) {
+    throw "The manifest executable is missing from the package output: $($application.Executable)"
+}
 $runtimeDependency = $manifest.SelectSingleNode('//foundation:PackageDependency[contains(@Name, "WindowsAppRuntime")]', $namespace)
 if ($null -ne $runtimeDependency) { throw 'The package still depends on an external Windows App SDK runtime.' }
 $runtimeDll = Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'
@@ -98,9 +111,9 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V4.1 Developer Preview output layout checks passed.'
+Write-Host 'V4.1.1 Developer Preview output layout checks passed.'
 Write-Host 'Package registration was not checked.'
-Write-Host 'Run scripts\verify-dev-install.ps1 after deploy-dev.ps1.'
+Write-Host "For a repository registration, run scripts\verify-dev-install.ps1 -ExpectedInstallLocation `"$guiOutput`"."
 Write-Host "Package identity: $($identity.Name)"
 Write-Host "GUI output: $guiOutput"
 Write-Host "Shell extension: $shellPath"
