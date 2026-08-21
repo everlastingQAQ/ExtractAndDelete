@@ -44,6 +44,8 @@ jobs:
           if ($env:RELEASE_TAG -ne $expectedTag) {
             throw "Tag $env:RELEASE_TAG does not match $expectedTag."
           }
+          "RELEASE_VERSION=$($config.semanticVersion)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PACKAGE_VERSION=$($config.packageVersion)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Verify release build and ordinary tests
         shell: pwsh
@@ -77,7 +79,7 @@ jobs:
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
-          subject-path: artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe
+          subject-path: artifacts/release/**/ExtractAndDelete-Setup-*-x64.exe
 
       - name: Create public release
         shell: pwsh
@@ -85,12 +87,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:RELEASE_TAG
+          $config = Get-Content -LiteralPath .\release-config.json -Raw | ConvertFrom-Json
+          $releaseRoot = Join-Path 'artifacts\release' ([string]$config.semanticVersion)
+          $installer = Join-Path $releaseRoot "ExtractAndDelete-Setup-$($config.semanticVersion)-x64.exe"
+          $hash = "$installer.sha256"
           $release = gh release create $tag `
-            artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe `
-            artifacts/release/4.1.0/ExtractAndDelete-Setup-4.1.0-x64.exe.sha256 `
+            $installer `
+            $hash `
             --draft `
-            --title 'Extract & Delete 4.1.0 Developer Preview' `
-            --notes-file docs/releases/v4.1.0.md
+            --title "Extract & Delete $($config.semanticVersion) Developer Preview" `
+            --notes-file ("docs/releases/v{0}.md" -f $config.semanticVersion)
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release draft creation failed.' }
           gh release edit $tag --draft=false --latest
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
@@ -101,4 +107,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view $env:RELEASE_TAG
-          gh release download $env:RELEASE_TAG --dir (Join-Path $env:RUNNER_TEMP 'published-release') --pattern 'ExtractAndDelete-Setup-4.1.0-x64.exe*'
+          gh release download $env:RELEASE_TAG --dir (Join-Path $env:RUNNER_TEMP 'published-release') --pattern ("ExtractAndDelete-Setup-{0}-x64.exe*" -f $env:RELEASE_VERSION)
