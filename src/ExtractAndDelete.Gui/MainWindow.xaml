@@ -5,43 +5,65 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="Extract &amp; Delete">
-    <ScrollViewer>
-        <StackPanel Spacing="12" Padding="28" MaxWidth="760">
-            <TextBlock Text="Extract &amp; Delete" FontSize="28" FontWeight="SemiBold" />
-            <TextBlock Text="仅在完整解压成功后，源压缩包才会移入回收站。" TextWrapping="Wrap" />
+    Title="提取压缩文件夹">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-            <TextBlock Text="压缩包" Margin="0,16,0,0" />
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ArchivePath, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="压缩包路径" />
-                <Button Grid.Column="1" Content="选择压缩包" Click="ChooseArchiveButton_Click" IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}" AutomationProperties.Name="选择压缩包" />
-            </Grid>
-
-            <TextBlock Text="目标父目录" Margin="0,8,0,0" />
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ParentDirectory, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="目标父目录路径" />
-                <Button Grid.Column="1" Content="选择文件夹" Click="ChooseFolderButton_Click" IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}" AutomationProperties.Name="选择目标父目录" />
-            </Grid>
-
-            <TextBlock Text="最终目录" Margin="0,8,0,0" />
-            <TextBox Text="{x:Bind ViewModel.DestinationPath, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="最终目录路径" />
-
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
-                <Button Content="解压并回收" Click="ExecuteButton_Click" IsEnabled="{x:Bind ViewModel.CanExecute, Mode=OneWay}" AutomationProperties.Name="解压并回收" />
-                <Button Content="取消" Click="CancelButton_Click" IsEnabled="{x:Bind ViewModel.CanCancel, Mode=OneWay}" AutomationProperties.Name="取消解压" />
+        <StackPanel Padding="28,18,28,22" Spacing="14" Width="760" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <Button x:Name="BackButton" Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" IsEnabled="False"
+                        Width="32" Height="32" Padding="0" AutomationProperties.Name="返回" />
+                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="22" VerticalAlignment="Center"
+                           Foreground="{ThemeResource SystemControlForegroundBaseMediumHighBrush}" />
+                <TextBlock Text="提取压缩文件夹" FontSize="18" VerticalAlignment="Center" />
             </StackPanel>
 
-            <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercentage, Mode=OneWay}" IsIndeterminate="{x:Bind ViewModel.IsProgressIndeterminate, Mode=OneWay}" Margin="0,12,0,0" AutomationProperties.Name="解压进度" />
-            <TextBlock Text="{x:Bind ViewModel.CurrentEntry, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="当前文件" />
-            <TextBlock x:Name="StatusTextBlock" Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="状态与错误信息" />
+            <TextBlock Text="选择一个目标并提取文件" FontSize="22" Foreground="#005FB8" Margin="20,26,0,12" />
+
+            <TextBlock Text="文件将被提取到这个文件夹(F):" FontSize="14" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Text="{x:Bind ViewModel.TargetPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}"
+                         AutomationProperties.Name="提取目标文件夹" />
+                <Button Grid.Column="1" Content="浏览(R)..." AccessKey="R" Click="ChooseFolderButton_Click"
+                        IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}"
+                        AutomationProperties.Name="浏览目标文件夹" />
+            </Grid>
+
+            <CheckBox x:Name="ShowFilesCheckBox" Content="完成时显示提取的文件(H)" AccessKey="H"
+                      IsChecked="{x:Bind ViewModel.ShowExtractedFiles, Mode=TwoWay}"
+                      IsEnabled="{x:Bind ViewModel.CanSelectPaths, Mode=OneWay}"
+                      Margin="0,12,0,0"
+                      AutomationProperties.Name="完成时显示提取的文件" />
+
+            <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" Spacing="8" Margin="0,14,0,0">
+                <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind ViewModel.ProgressPercentage, Mode=OneWay}"
+                             IsIndeterminate="{x:Bind ViewModel.IsProgressIndeterminate, Mode=OneWay}"
+                             AutomationProperties.Name="提取进度" />
+                <TextBlock Text="{x:Bind ViewModel.CurrentEntry, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.Name="当前文件" />
+            </StackPanel>
+
+            <TextBlock x:Name="StatusTextBlock" Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                       TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.Name="状态与错误信息" />
         </StackPanel>
-    </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
+                    Padding="28,12,28,18">
+            <Button x:Name="ExecuteButton" Content="提取并回收(E)" AccessKey="E" Click="ExecuteButton_Click"
+                    IsEnabled="{x:Bind ViewModel.CanExecute, Mode=OneWay}"
+                    AutomationProperties.Name="提取并回收" />
+            <Button x:Name="CancelButton" Content="取消" Click="CancelButton_Click"
+                    IsEnabled="{x:Bind ViewModel.CanCancelButton, Mode=OneWay}"
+                    AutomationProperties.Name="取消" />
+        </StackPanel>
+    </Grid>
 </Window>
