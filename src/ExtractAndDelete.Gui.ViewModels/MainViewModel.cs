@@ -25,6 +25,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string? _legacyDestinationPath;
     private string _currentEntry = string.Empty;
     private string _statusMessage = "请选择压缩包。";
+    private WorkflowStage _currentStage = WorkflowStage.Validating;
+    private int _completedEntries;
+    private int _totalEntries;
+    private long _completedBytes;
+    private long _totalBytes;
     private double _progressPercentage;
     private bool _isProgressIndeterminate;
     private bool _isRunning;
@@ -70,6 +75,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _currentEntry;
         private set => SetField(ref _currentEntry, value);
+    }
+
+    public WorkflowStage CurrentStage
+    {
+        get => _currentStage;
+        private set => SetField(ref _currentStage, value);
+    }
+
+    public int CompletedEntries
+    {
+        get => _completedEntries;
+        private set => SetField(ref _completedEntries, value);
+    }
+
+    public int TotalEntries
+    {
+        get => _totalEntries;
+        private set => SetField(ref _totalEntries, value);
+    }
+
+    public long CompletedBytes
+    {
+        get => _completedBytes;
+        private set => SetField(ref _completedBytes, value);
+    }
+
+    public long TotalBytes
+    {
+        get => _totalBytes;
+        private set => SetField(ref _totalBytes, value);
     }
 
     public string StatusMessage
@@ -248,6 +283,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ProgressPercentage = 0;
         IsProgressIndeterminate = false;
         CurrentEntry = string.Empty;
+        CurrentStage = WorkflowStage.Validating;
+        CompletedEntries = 0;
+        TotalEntries = 0;
+        CompletedBytes = 0;
+        TotalBytes = 0;
         SetStatus("正在验证操作……", StatusTone.Normal);
 
         Progress<ExtractionProgress> progress = new(UpdateProgress);
@@ -358,6 +398,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         CanCancel = progress.CanCancel
             && progress.Stage is WorkflowStage.Scanning or WorkflowStage.Extracting or WorkflowStage.Publishing;
         CurrentEntry = progress.CurrentEntry ?? string.Empty;
+        CurrentStage = progress.Stage;
+        CompletedEntries = progress.CompletedEntries;
+        TotalEntries = progress.TotalEntries;
+        CompletedBytes = progress.CompletedBytes;
+        TotalBytes = progress.TotalBytes;
         IsProgressIndeterminate = progress.IsIndeterminate;
         ProgressPercentage = Math.Clamp(progress.Percentage, 0, 100);
         SetStatus(progress.Stage switch
@@ -376,6 +421,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         _completedSuccessfully = result.Success;
         IsProgressIndeterminate = false;
+        CurrentStage = WorkflowStage.Completed;
         if (result.DestinationPublished)
         {
             ProgressPercentage = 100;
