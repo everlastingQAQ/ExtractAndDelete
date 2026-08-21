@@ -11,17 +11,15 @@ $guiOutput = Join-Path $repoRoot "src\ExtractAndDelete.Gui\bin\$Configuration\ne
 $manifestPath = Join-Path $guiOutput 'AppxManifest.xml'
 $shellPath = Join-Path $guiOutput 'ExtractAndDelete.ShellExtension.dll'
 $guiExePath = Join-Path $guiOutput 'ExtractAndDelete.Gui.exe'
-$cliPath = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ExtractAndDelete.Cli.dll"
 $guiSevenZipRoot = Join-Path $guiOutput 'ThirdParty\7-Zip'
-$cliSevenZipRoot = Join-Path $repoRoot "src\ExtractAndDelete.Cli\bin\$Configuration\net10.0-windows10.0.22000.0\ThirdParty\7-Zip"
+$guiProjectPath = Join-Path $repoRoot 'src\ExtractAndDelete.Gui\ExtractAndDelete.Gui.csproj'
 
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw "Packaged manifest is missing: $manifestPath" }
 if (-not (Test-Path -LiteralPath $guiExePath -PathType Leaf)) { throw "GUI executable is missing: $guiExePath" }
-if (-not (Test-Path -LiteralPath $cliPath)) { throw "CLI output is missing: $cliPath" }
 if (-not (Test-Path -LiteralPath $shellPath)) {
     throw "Shell extension output is missing. Build scripts/verify.ps1 first with the Native Desktop workload."
 }
-foreach ($root in @($guiSevenZipRoot, $cliSevenZipRoot)) {
+foreach ($root in @($guiSevenZipRoot)) {
     foreach ($fileName in @('7z.exe', '7z.dll')) {
         $enginePath = Join-Path $root $fileName
         if (-not (Test-Path -LiteralPath $enginePath -PathType Leaf)) {
@@ -37,8 +35,22 @@ $requiredGuiFiles = @(
 )
 foreach ($requiredFile in $requiredGuiFiles) {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
-        throw "Required V3 GUI package file is missing: $requiredFile"
+        throw "Required V4 GUI package file is missing: $requiredFile"
     }
+}
+
+[xml]$guiProject = Get-Content -LiteralPath $guiProjectPath -Raw
+$propertyGroup = $guiProject.Project.PropertyGroup | Where-Object { $_.UseWindowsForms -eq 'true' } | Select-Object -First 1
+if ($null -eq $propertyGroup) { throw 'GUI project is not configured to use WinForms native controls.' }
+if ($propertyGroup.ApplicationHighDpiMode -ne 'PerMonitorV2') {
+    throw 'GUI project must opt into PerMonitorV2 before creating any window.'
+}
+
+$cliArtifacts = @(Get-ChildItem -LiteralPath $guiOutput -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like 'ExtractAndDelete.Cli*' })
+if ($cliArtifacts.Count -ne 0) {
+    $paths = $cliArtifacts | ForEach-Object FullName
+    throw "Frozen CLI artifacts leaked into the GUI package output: $($paths -join ', ')"
 }
 
 [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -50,7 +62,7 @@ $namespace.AddNamespace('com', 'http://schemas.microsoft.com/appx/manifest/com/w
 
 $identity = $manifest.SelectSingleNode('/foundation:Package/foundation:Identity', $namespace)
 if ($null -eq $identity -or $identity.Name -ne 'ExtractAndDelete') { throw 'Package identity is not ExtractAndDelete.' }
-if ($identity.Version -ne '3.0.0.0') { throw "Package version is not V3 3.0.0.0: $($identity.Version)" }
+if ($identity.Version -ne '4.0.0.0') { throw "Package version is not V4 4.0.0.0: $($identity.Version)" }
 $runtimeDependency = $manifest.SelectSingleNode('//foundation:PackageDependency[contains(@Name, "WindowsAppRuntime")]', $namespace)
 if ($null -ne $runtimeDependency) { throw 'The package still depends on an external Windows App SDK runtime.' }
 $runtimeDll = Join-Path $guiOutput 'Microsoft.WindowsAppRuntime.dll'
@@ -77,9 +89,10 @@ if ($forbiddenArtifacts.Count -ne 0) {
     throw "Forbidden signing/package artifacts found in the repository: $($paths -join ', ')"
 }
 
-Write-Host 'V3 Developer RC output layout checks passed.'
+Write-Host 'V4 Developer RC output layout checks passed.'
 Write-Host 'Package registration was not checked.'
 Write-Host 'Run scripts\verify-dev-install.ps1 after deploy-dev.ps1.'
 Write-Host "Package identity: $($identity.Name)"
 Write-Host "GUI output: $guiOutput"
 Write-Host "Shell extension: $shellPath"
+Write-Host 'CLI is source-frozen and is not part of the default build or delivery.'

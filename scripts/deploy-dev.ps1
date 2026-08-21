@@ -41,7 +41,7 @@ try {
         'THIRD-PARTY-NOTICES.md')) {
         $requiredPath = Join-Path $outputPath $requiredRelativePath
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
-            throw "Required V3 package file is missing: $requiredPath"
+            throw "Required V4 package file is missing: $requiredPath"
         }
     }
 

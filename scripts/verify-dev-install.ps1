@@ -57,8 +57,8 @@ if ($identity.Name -ne 'ExtractAndDelete') {
 if ($identity.Publisher -ne 'CN=ExtractAndDelete Developer') {
     Fail "清单 Publisher 不匹配：$($identity.Publisher)。"
 }
-if ($identity.Version -ne '3.0.0.0') {
-    Fail "清单 Version 不匹配：$($identity.Version)。"
+if ($identity.Version -ne '4.0.0.0') {
+    Fail "清单 Version 不匹配，预期 V4 4.0.0.0：$($identity.Version)。"
 }
 
 $application = $manifest.SelectSingleNode('/foundation:Package/foundation:Applications/foundation:Application', $namespace)
