@@ -2,7 +2,7 @@
 
 面向 Windows 11 x64 的安全压缩包工具：完整提取后，将源压缩包移入 Windows 回收站。
 
-当前版本为 `4.1.0` Developer Preview。产品使用 WinForms/Win32 原生控件复刻 Windows 11“提取压缩(Zipped)文件夹”窗口，内置官方 7-Zip 26.02 x64，并通过 Windows 11 Explorer 现代右键菜单提供“解压并回收”。
+当前版本为 `4.1.1` Developer Preview。产品使用 WinForms/Win32 原生控件复刻 Windows 11“提取压缩(Zipped)文件夹”窗口，内置官方 7-Zip 26.02 x64，并通过 Windows 11 Explorer 现代右键菜单提供“解压并回收”。4.1.1 修复了 4.1.0 loose-file package 清单导致的启动和 RPC 错误。
 
 ## 重要限制
 
@@ -20,7 +20,7 @@
 
 <https://github.com/everlastingQAQ/ExtractAndDelete/releases>
 
-下载与版本匹配的 `ExtractAndDelete-Setup-4.1.0-x64.exe`，按同名 `.sha256` 文件核对完整性，然后双击安装。安装器会把 payload 写入当前用户的：
+下载与版本匹配的 `ExtractAndDelete-Setup-4.1.1-x64.exe`，可选按同名 `.sha256` 文件核对完整性，然后双击安装。安装器会把 payload 写入当前用户的：
 
 ```text
 %LOCALAPPDATA%\Programs\ExtractAndDelete
@@ -76,7 +76,7 @@ dotnet test .\ExtractAndDelete.slnx `
 ```powershell
 .\scripts\check-dev-environment.ps1
 .\scripts\deploy-dev.ps1
-.\scripts\verify-dev-install.ps1
+.\scripts\verify-dev-install.ps1 -ExpectedInstallLocation (Resolve-Path .\src\ExtractAndDelete.Gui\bin\Release\net10.0-windows10.0.22000.0\win-x64)
 ```
 
 开发注销：
@@ -92,6 +92,7 @@ dotnet test .\ExtractAndDelete.slnx `
 - [使用文档](docs/USAGE.md)
 - [项目总设计](docs/PROJECT_DESIGN.md)
 - [验收说明](docs/ACCEPTANCE.md)
-- [4.1.0 Developer Preview 发布说明](docs/releases/v4.1.0.md)
+- [4.1.1 Developer Preview 发布说明](docs/releases/v4.1.1.md)
+- [4.1.0 历史发布说明](docs/releases/v4.1.0.md)
 - [第三方声明](THIRD-PARTY-NOTICES.md)
 - [MIT License](LICENSE)

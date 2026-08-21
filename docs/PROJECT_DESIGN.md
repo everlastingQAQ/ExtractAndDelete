@@ -1,12 +1,12 @@
 # Extract & Delete 项目总设计文档
 
-## 1. V4.1 基线
+## 1. V4.1.1 基线
 
-V4.1 Developer Preview 版本为 `4.1.0` / package `4.1.0.0`，只支持 Windows 11 x64 和 Developer Mode。应用继续使用 .NET 10、Windows App SDK 2.3.1、single-project MSIX、自包含 x64 输出、固定 package identity 和 Explorer 现代右键菜单。公开交付由 Inno Setup 6.7.3 封装为一个当前用户 EXE 安装器；安装器、卸载器和应用均未使用生产 Authenticode 签名。
+V4.1.1 Developer Preview 版本为 `4.1.1` / package `4.1.1.0`，只支持 Windows 11 x64 和 Developer Mode。应用继续使用 .NET 10、Windows App SDK 2.3.1、single-project MSIX、自包含 x64 输出、固定 package identity 和 Explorer 现代右键菜单。公开交付由 Inno Setup 6.7.3 封装为一个当前用户 EXE 安装器；安装器、卸载器和应用均未使用生产 Authenticode 签名。
 
 可见窗口已经从 WinUI XAML 迁移为 C# WinForms/Win32 Common Controls。Windows App SDK 只保留 packaged 构建、自包含 runtime 和 AppInstance 单实例能力，不参与可见窗口渲染。
 
-内置官方 7-Zip 26.02 x64（`7z.exe`、`7z.dll`）负责扫描和安全 staging 解压，支持 ZIP、7Z、RAR、TAR。CLI 源码仍保留在 `src/ExtractAndDelete.Cli`，但 V4.1 已冻结，不进入默认 solution、测试、发布、安装器或用户交付。
+内置官方 7-Zip 26.02 x64（`7z.exe`、`7z.dll`）负责扫描和安全 staging 解压，支持 ZIP、7Z、RAR、TAR。CLI 源码仍保留在 `src/ExtractAndDelete.Cli`，但 V4.1.1 已冻结，不进入默认 solution、测试、发布、安装器或用户交付。
 
 ## 2. 产品不变量
 
@@ -121,7 +121,7 @@ Explorer 清单继续注册 `.zip`、`.7z`、`.rar`、`.tar`，单选启用、�
 ```text
 Name      ExtractAndDelete
 Publisher CN=ExtractAndDelete Developer
-Version   4.1.0.0
+Version   4.1.1.0
 App ID    App
 CLSID     4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 ```
@@ -131,19 +131,19 @@ CLSID     4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 发布配置集中在 `release-config.json`，固定以下值：
 
 ```text
-semanticVersion   4.1.0
-packageVersion    4.1.0.0
-git tag            v4.1.0
+semanticVersion   4.1.1
+packageVersion    4.1.1.0
+git tag            v4.1.1
 Inno Setup         6.7.3
 Installer AppId   {E8A892FB-7B98-4400-B316-083DEF0CEA12}
 Install root       %LOCALAPPDATA%\Programs\ExtractAndDelete
-Payload            app-4.1.0.0
+Payload            app-4.1.1.0
 Package Family     ExtractAndDelete_vyz6krqqgd78c
 AUMID              ExtractAndDelete_vyz6krqqgd78c!App
 Shell CLSID        4F4F8F37-B78C-4B3D-90CE-8D16C4483B8E
 ```
 
-`installer\ExtractAndDelete.iss` 以 Inno modern wizard 生成 `ExtractAndDelete-Setup-4.1.0-x64.exe`。安装范围固定为当前用户（`PrivilegesRequired=lowest`），只允许 x64compatible Windows 11，不创建桌面快捷方式，不关闭进程，不导入证书。安装器页面使用仓库内的简体中文 Inno messages，并明确显示 Developer Mode、未签名 SmartScreen、固定路径和两个卸载入口。
+`installer\ExtractAndDelete.iss` 以 Inno modern wizard 生成 `ExtractAndDelete-Setup-4.1.1-x64.exe`。安装范围固定为当前用户（`PrivilegesRequired=lowest`），只允许 x64compatible Windows 11，不创建桌面快捷方式，不关闭进程，不导入证书。安装器页面使用仓库内的简体中文 Inno messages，并明确显示 Developer Mode、未签名 SmartScreen、固定路径和两个卸载入口。
 
 `scripts\package-lifecycle.ps1` 是安装器和卸载器唯一的 package 生命周期边界：
 
@@ -160,7 +160,7 @@ Windows 会看到两个入口：`Extract & Delete（完整卸载）` 是 Inno �
 
 `scripts\build-installer.ps1` 先构建 x64 C++ DLL、发布自包含 GUI、复制 package 清单，剔除 PDB/CLI，生成覆盖全部 payload 文件的 `payload.sha256`，再调用 Inno。`scripts\verify-installer.ps1` 检查 EXE 哈希、版本资源、`NotSigned` 状态和 Release 根目录白名单。`check-release-environment.ps1` 定位 VS/MSBuild、.NET 10.0.400、7-Zip 哈希和 Inno 6.7.3；它不自动安装工具或开启 Developer Mode。
 
-`.github/workflows/release.yml` 只接受 `v4.1.0` 这类精确版本 tag，验证 tag 属于 `main`，在 Windows runner 上重建、测试、下载并校验 Inno、生成 EXE 和 GitHub artifact attestation，最后创建公开非 Draft Release。发布资产只有 EXE 和 `.sha256`；attestation/哈希证明来源与完整性，不代替 Authenticode 信任。
+`.github/workflows/release.yml` 只接受与 `release-config.json` 一致的精确版本 tag，验证 tag 属于 `main`，在 Windows runner 上重建、测试、下载并校验 Inno、生成 EXE 和 GitHub artifact attestation，最后创建公开非 Draft Release。发布资产只有 EXE 和 `.sha256`；attestation/哈希证明来源与完整性，不代替 Authenticode 信任。
 
 ## 10. 测试和交付
 
@@ -173,7 +173,7 @@ GUI 交互验收覆盖开始菜单、Explorer 激活、单实例、路径编辑�
 dotnet test .\ExtractAndDelete.slnx --configuration Release --filter "Category=WindowsIntegration"
 .\scripts\acceptance-check.ps1
 .\scripts\deploy-dev.ps1
-.\scripts\verify-dev-install.ps1
+.\scripts\verify-dev-install.ps1 -ExpectedInstallLocation (Resolve-Path .\src\ExtractAndDelete.Gui\bin\Release\net10.0-windows10.0.22000.0\win-x64)
 ```
 
 直接在 `main` 分阶段提交和 push，不创建 Issue、PR 或额外分支，不 force-push，不提交证书、签名包、用户截图或用户文件。

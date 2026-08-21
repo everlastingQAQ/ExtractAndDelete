@@ -1,11 +1,11 @@
-# Extract & Delete 4.1 使用文档
+# Extract & Delete 4.1.1 使用文档
 
-`Extract & Delete 4.1.0 Developer Preview` 是一个面向 Windows 11 x64 的单 EXE 安装版本。它仍需要 Windows Developer Mode；安装器未使用生产 Authenticode 签名，因此 SmartScreen 可能显示“未知发布者”警告。
+`Extract & Delete 4.1.1 Developer Preview` 是一个面向 Windows 11 x64 的单 EXE 安装版本。它仍需要 Windows Developer Mode；安装器未使用生产 Authenticode 签名，因此 SmartScreen 可能显示“未知发布者”警告。4.1.1 修复了 4.1.0 的 package 清单入口错误。
 
 普通用户只需要从 GitHub Release 下载并运行：
 
 ```text
-ExtractAndDelete-Setup-4.1.0-x64.exe
+ExtractAndDelete-Setup-4.1.1-x64.exe
 ```
 
 不需要克隆仓库、安装 Visual Studio、.NET、Windows App SDK 或系统 7-Zip。安装器将自包含的 GUI、Shell Extension、Windows App SDK、.NET 运行时和 7-Zip 26.02 放入当前用户目录：
@@ -35,12 +35,12 @@ ExtractAndDelete-Setup-4.1.0-x64.exe
 
 ## 2. 下载、校验和安装
 
-1. 在 GitHub Release 下载 `ExtractAndDelete-Setup-4.1.0-x64.exe` 和同名 `.sha256` 文件。
+1. 在 GitHub Release 下载 `ExtractAndDelete-Setup-4.1.1-x64.exe`。`.sha256` 文件是可选的完整性校验文件。
 2. 可选地在 PowerShell 中校验：
 
    ```powershell
-   Get-FileHash .\ExtractAndDelete-Setup-4.1.0-x64.exe -Algorithm SHA256
-   Get-Content .\ExtractAndDelete-Setup-4.1.0-x64.exe.sha256
+   Get-FileHash .\ExtractAndDelete-Setup-4.1.1-x64.exe -Algorithm SHA256
+   Get-Content .\ExtractAndDelete-Setup-4.1.1-x64.exe.sha256
    ```
 
 3. 双击 EXE。若 SmartScreen 显示未知发布者，确认文件来自本项目的 GitHub Release 后选择“更多信息 → 仍要运行”。
@@ -61,13 +61,14 @@ Get-AppxPackage -Name ExtractAndDelete |
     Select-Object Name, PackageFullName, Version, Status, InstallLocation
 ```
 
-预期为 `Name=ExtractAndDelete`、`Version=4.1.0.0`、`Status=Ok`，安装目录末尾为 `app-4.1.0.0`。
+预期为 `Name=ExtractAndDelete`、`Version=4.1.1.0`、`Status=Ok`，安装目录末尾为 `app-4.1.1.0`。
 
 ## 3. 升级、修复和迁移
 
 升级没有自动更新。下载更高版本安装器并再次运行即可。
 
-- 已安装更低版本时，安装器先写入新 `app-4.1.0.0`，验证 SHA-256 后再切换 package 注册。
+- 已安装更低版本时，安装器先写入新 `app-4.1.1.0`，验证 payload 后再切换 package 注册。
+- 如果旧版本的 `InstallLocation` 为空、目录丢失或清单仍有 `$targetnametoken$` 占位符，4.1.1 会将其识别为损坏残留并只修复固定的 ExtractAndDelete package。
 - 当前仓库注册的 4.0 开发版会自动迁移；仓库目录、源代码和构建输出不会删除。
 - 再次运行同一版本会进入修复流程，不会产生第二个 package 或第二个完整卸载入口。
 - 高于安装器版本的 package 不会被降级。
@@ -156,7 +157,7 @@ Extract & Delete（系统集成组件）
 
 ### 没有右键菜单
 
-确认 Developer Mode 已开启，检查 package 的 `Status=Ok` 和 `Version=4.1.0.0`，然后重启 Explorer。重新运行安装器可执行修复。
+确认 Developer Mode 已开启，检查 package 的 `Status=Ok`、`Version=4.1.1.0` 和非空 `InstallLocation`，然后重启 Explorer。重新运行 4.1.1 安装器可执行修复。
 
 ### 安装器显示未知发布者
 
@@ -170,4 +171,4 @@ Extract & Delete（系统集成组件）
 
 安装预检、迁移、注册和回滚日志位于 `%LOCALAPPDATA%\Temp\ExtractAndDelete-Setup-*.log`。把对应日志中的 HRESULT 和最后一条失败消息用于排查；不要删除或修改用户解压数据来“修复”安装。
 
-开发者构建、测试和发布流程见：[项目总设计](PROJECT_DESIGN.md)、[V4.1 验收说明](ACCEPTANCE.md)、[4.1.0 Release Notes](releases/v4.1.0.md)、[第三方声明](../THIRD-PARTY-NOTICES.md)。CLI 源码仍保留作历史参考，但已冻结，不属于用户交付。
+开发者构建、测试和发布流程见：[项目总设计](PROJECT_DESIGN.md)、[V4.1.1 验收说明](ACCEPTANCE.md)、[4.1.1 Release Notes](releases/v4.1.1.md)、[4.1.0 历史 Release Notes](releases/v4.1.0.md)、[第三方声明](../THIRD-PARTY-NOTICES.md)。CLI 源码仍保留作历史参考，但已冻结，不属于用户交付。
