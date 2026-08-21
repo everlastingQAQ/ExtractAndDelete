@@ -1,8 +1,8 @@
-#define DefaultReleaseVersion "4.1.0"
-#define DefaultPackageVersion "4.1.0.0"
+#define DefaultReleaseVersion "4.1.1"
+#define DefaultPackageVersion "4.1.1.0"
 #define DefaultPayloadSizeBytes "0"
-#define DefaultPayloadDir "..\\artifacts\\release\\4.1.0\\payload"
-#define DefaultOutputDir "..\\artifacts\\release\\4.1.0"
+#define DefaultPayloadDir "..\\artifacts\\release\\4.1.1\\payload"
+#define DefaultOutputDir "..\\artifacts\\release\\4.1.1"
 
 #ifndef ReleaseVersion
   #define ReleaseVersion DefaultReleaseVersion

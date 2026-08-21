@@ -45,6 +45,45 @@ function Get-MsbuildPath {
     return $path
 }
 
+function Write-LooseRegistrationManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$TemplatePath,
+        [Parameter(Mandatory = $true)][string]$DestinationPath,
+        [Parameter(Mandatory = $true)][string]$Version
+    )
+
+    [xml]$manifest = Get-Content -LiteralPath $TemplatePath -Raw -Encoding UTF8
+    $identity = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
+    $application = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Applications']/*[local-name()='Application']")
+    if ($null -eq $identity -or $null -eq $application) {
+        throw '源 package manifest 缺少 Identity 或 Application。'
+    }
+
+    # The source manifest intentionally uses the MSIX build tokens. Loose-file
+    # registration bypasses that build transform, so the installer payload must
+    # contain the concrete full-trust executable and entry point.
+    $identity.SetAttribute('Version', $Version)
+    $identity.SetAttribute('ProcessorArchitecture', 'x64')
+    $application.SetAttribute('Executable', 'ExtractAndDelete.Gui.exe')
+    $application.SetAttribute('EntryPoint', 'Windows.FullTrustApplication')
+
+    $serialized = $manifest.OuterXml
+    if ($serialized -match '\$targetnametoken\$|\$targetentrypoint\$') {
+        throw '生成的 loose-registration manifest 仍包含 MSIX 占位符。'
+    }
+
+    $settings = New-Object System.Xml.XmlWriterSettings
+    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+    $settings.Indent = $true
+    $writer = [System.Xml.XmlWriter]::Create($DestinationPath, $settings)
+    try {
+        $manifest.Save($writer)
+    }
+    finally {
+        $writer.Dispose()
+    }
+}
+
 Push-Location $repoRoot
 try {
     & (Join-Path $repoRoot 'scripts\check-release-environment.ps1') -IsccPath $IsccPath
@@ -66,10 +105,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "GUI publish failed with exit code $LASTEXITCODE." }
 
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $payloadPath 'LICENSE') -Force
-    # `dotnet publish` emits the self-contained executable and package assets, but
-    # loose-file registration still needs the source package manifest beside them.
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'src\ExtractAndDelete.Gui\Package.appxmanifest') `
-        -Destination (Join-Path $payloadPath 'AppxManifest.xml') -Force
+    # The source manifest is a build template. Generate a separate concrete
+    # manifest for Add-AppxPackage -Register; registering the MSIX tokens causes
+    # Windows to launch a broken AppX registration and can hang COM Surrogate.
+    Write-LooseRegistrationManifest `
+        -TemplatePath (Join-Path $repoRoot 'src\ExtractAndDelete.Gui\Package.appxmanifest') `
+        -DestinationPath (Join-Path $payloadPath 'AppxManifest.xml') `
+        -Version $packageVersion
 
     $pdbFiles = @(Get-ChildItem -LiteralPath $payloadPath -Recurse -File -Filter '*.pdb' -Force)
     foreach ($pdb in $pdbFiles) {
@@ -86,6 +128,15 @@ try {
         $identity.GetAttribute('Publisher') -ne [string]$config.publisher -or
         $identity.GetAttribute('Version') -ne $packageVersion) {
         throw '发布清单身份、Publisher 或版本不符合 release-config.json。'
+    }
+    $application = $manifest.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Applications']/*[local-name()='Application']")
+    if ($null -eq $application -or $identity.GetAttribute('ProcessorArchitecture') -ne 'x64' -or
+        $application.GetAttribute('Executable') -ne 'ExtractAndDelete.Gui.exe' -or
+        $application.GetAttribute('EntryPoint') -ne 'Windows.FullTrustApplication') {
+        throw '发布清单不是有效的 x64 loose-registration 清单。'
+    }
+    if ($manifest.OuterXml -match '\$targetnametoken\$|\$targetentrypoint\$') {
+        throw '发布清单仍包含 MSIX 占位符。'
     }
 
     $required = @(
